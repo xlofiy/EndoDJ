@@ -66,13 +66,21 @@ export class OverviewView {
     }
   }
 
+  private last = '';
+
   draw(): void {
     const { canvas, deck } = this;
     const resized = fitCanvas(canvas);
-    if (resized || this.cachedFor !== deck.waveform) {
+    const cacheStale = resized || this.cachedFor !== deck.waveform;
+    if (cacheStale) {
       this.renderCache();
       this.cachedFor = deck.waveform;
     }
+    // skip the redraw when nothing visible changed (paused decks cost nothing)
+    const px = deck.duration ? Math.round((deck.time / deck.duration) * canvas.width) : -1;
+    const sig = `${px}|${deck.cuePoint}|${deck.hotcues.join(',')}|${deck.loop?.start}|${deck.loop?.end}|${deck.loopActive}|${deck.loaded}`;
+    if (!cacheStale && sig === this.last) return;
+    this.last = sig;
     const g = canvas.getContext('2d')!;
     const W = canvas.width;
     const H = canvas.height;
@@ -109,10 +117,14 @@ export class ZoomView {
   private dragging: { x: number; wasPlaying: boolean } | null = null;
 
   constructor(readonly canvas: HTMLCanvasElement, private deck: Deck, private color: string) {
-    canvas.addEventListener('wheel', (e) => {
-      e.preventDefault();
-      this.span = Math.max(1, Math.min(16, this.span * (e.deltaY > 0 ? 1.15 : 1 / 1.15)));
-    });
+    canvas.addEventListener(
+      'wheel',
+      (e) => {
+        e.preventDefault();
+        this.span = Math.max(1, Math.min(16, this.span * (e.deltaY > 0 ? 1.15 : 1 / 1.15)));
+      },
+      { passive: false },
+    );
     canvas.addEventListener('pointerdown', (e) => {
       if (!this.deck.loaded) return;
       canvas.setPointerCapture(e.pointerId);
@@ -134,9 +146,14 @@ export class ZoomView {
     canvas.addEventListener('pointercancel', end);
   }
 
+  private last = '';
+
   draw(): void {
     const { canvas, deck } = this;
-    fitCanvas(canvas);
+    const resized = fitCanvas(canvas);
+    const sig = `${deck.time.toFixed(4)}|${this.span}|${deck.tempoFactor}|${deck.waveform ? 1 : 0}|${deck.grid?.bpm}|${deck.grid?.firstBeat}|${deck.cuePoint}|${deck.hotcues.join(',')}|${deck.loop?.start}|${deck.loop?.end}|${deck.loopActive}|${deck.loaded}`;
+    if (!resized && sig === this.last) return;
+    this.last = sig;
     const g = canvas.getContext('2d')!;
     const W = canvas.width;
     const H = canvas.height;

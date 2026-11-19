@@ -113,11 +113,13 @@ export function quantize(grid: Grid, timeSec: number, division = 1): number {
 /** Tempo factor a follower deck needs so its effective BPM matches the leader's. */
 export function syncTempo(followerBpm: number, leaderEffectiveBpm: number): number {
   if (followerBpm <= 0 || leaderEffectiveBpm <= 0) return 1;
+  // Match half/double time only when that is clearly closer (e.g. 87 vs 174). For tempos that
+  // are far apart in both octaves (180 vs 124) play at the leader's actual BPM.
+  const dist = (t: number) => Math.abs(Math.log2(t / followerBpm));
   let target = leaderEffectiveBpm;
-  // match half/double time if that is much closer (e.g. 87 vs 174)
-  const ratio = target / followerBpm;
-  if (ratio > 1.5) target /= 2;
-  else if (ratio < 0.75) target *= 2;
+  for (const alt of [leaderEffectiveBpm * 2, leaderEffectiveBpm / 2]) {
+    if (dist(alt) < dist(target) - 0.25) target = alt;
+  }
   return target / followerBpm;
 }
 

@@ -55,6 +55,10 @@ describe('sync math', () => {
     expect(syncTempo(125, 128)).toBeCloseTo(128 / 125);
     expect(syncTempo(87, 174)).toBeCloseTo(1);
     expect(syncTempo(174, 87)).toBeCloseTo(1);
+    expect(syncTempo(170, 87)).toBeCloseTo(174 / 170);
+    // far apart in both octaves → play at the leader's real tempo, not double time
+    expect(syncTempo(180, 124)).toBeCloseTo(124 / 180);
+    expect(syncTempo(90, 128)).toBeCloseTo(128 / 90);
   });
 
   it('phase correction aligns follower to leader', () => {

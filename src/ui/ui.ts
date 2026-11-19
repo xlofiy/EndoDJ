@@ -5,11 +5,11 @@ import { HOTCUE_COUNT, TEMPO_RANGES, type Deck } from '../audio/deck';
 import { BEAT_FRACTIONS, EFFECT_TYPES, type EffectType } from '../audio/effects';
 import { meterLevel, type FxTarget, type OutputMode } from '../audio/engine';
 import type { CrossfaderCurve } from '../audio/mixmath';
-import type { TrackRecord } from '../library/db';
-import { formatDuration, toCSV, toM3U, toText, type ExportTrack } from '../library/export';
-import { AUTOMIX_ID, HISTORY_ID, Library } from '../library/library';
 import { ddjFlx2Bindings } from '../midi/ddj-flx2';
 import type { ControlKind, MidiBinding } from '../midi/mapping';
+import { download, esc, LibraryView } from './library-view';
+import { PlatterView } from './platter-view';
+import { applyPrefs, loadPrefs, savePrefs, type Prefs } from './prefs';
 import { HOTCUE_COLORS, OverviewView, ZoomView, fitCanvas } from './waveform-view';
 
 type PadMode = 'hotcue' | 'beatloop' | 'beatjump' | 'sampler';
@@ -19,10 +19,6 @@ const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = 
   if (!el) throw new Error(`UI element not found: ${sel}`);
   return el;
 };
-
-function esc(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
-}
 
 function fmtTime(sec: number): string {
   if (!isFinite(sec) || sec < 0) sec = 0;
@@ -39,15 +35,6 @@ function fmtBeats(b: number): string {
   return String(b);
 }
 
-function download(name: string, content: string | Blob, type = 'text/plain'): void {
-  const blob = content instanceof Blob ? content : new Blob([content], { type });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-}
-
 function setText(el: HTMLElement, text: string): void {
   if (el.textContent !== text) el.textContent = text;
 }
@@ -56,44 +43,73 @@ function setClass(el: Element, cls: string, on: boolean): void {
   if (el.classList.contains(cls) !== on) el.classList.toggle(cls, on);
 }
 
+/** Element references for one deck, looked up once (the render loop runs every frame). */
 interface DeckUI {
   root: HTMLElement;
   overview: OverviewView;
   zoom: ZoomView;
+  platter: PlatterView;
   padMode: PadMode;
   pads: HTMLButtonElement[];
+  title: HTMLElement;
+  artist: HTMLElement;
+  bpmVal: HTMLElement;
+  bpmOrig: HTMLElement;
+  elapsed: HTMLElement;
+  remain: HTMLElement;
+  pitchVal: HTMLElement;
+  tempoVal: HTMLElement;
+  play: HTMLElement;
+  cue: HTMLElement;
+  sync: HTMLElement;
+  rev: HTMLElement;
+  quant: HTMLElement;
+  reloop: HTMLElement;
+  beatloops: HTMLButtonElement[];
+  fader: HTMLInputElement;
+  range: HTMLSelectElement;
 }
 
 export class UI {
   private decks: DeckUI[] = [];
-  private view: string = 'all';
-  private search = '';
-  private sortKey: keyof TrackRecord = 'addedAt';
-  private sortDir = -1;
-  private rows: string[] = [];
+  private library!: LibraryView;
   private meterBuf = new Float32Array(1024);
+  private meters!: HTMLCanvasElement[];
   private frame = 0;
   private recStart = 0;
+  private prefs: Prefs = loadPrefs();
 
   constructor(private app: App) {}
 
   init(): void {
+    applyPrefs(this.prefs);
     this.app.onToast = (m, e) => this.toast(m, e);
-    this.app.onBrowse = (d) => this.browse(d);
     this.app.onControl = () => this.syncControls();
+    this.library = new LibraryView(this.app, (m, e) => this.toast(m, e));
+    this.app.onBrowse = (d) => this.library.browse(d);
     for (let i = 0; i < 2; i++) this.buildDeck(i);
     this.buildMixer();
     this.buildTopbar();
-    this.buildLibrary();
+    this.buildSplitter();
+    this.library.init();
     this.buildDialogs();
     this.bindKeyboard();
-    this.app.library.on(() => this.renderLibrary());
     this.app.midi.onChange = () => {
       this.renderMidiStatus();
       if (($('#controller-dlg') as HTMLDialogElement).open) this.renderController(false);
     };
+    // highlight loaded tracks in the list when a deck loads something new
+    let loaded = '';
+    for (const d of this.app.engine.decks)
+      d.on(() => {
+        const now = this.app.engine.decks.map((x) => x.track?.id).join('|');
+        if (now !== loaded) {
+          loaded = now;
+          this.library.renderRows(true);
+        }
+      });
+    this.meters = [$<HTMLCanvasElement>('#meter-0'), $<HTMLCanvasElement>('#meter-1'), $<HTMLCanvasElement>('#master-meter')];
     this.renderMidiStatus();
-    this.renderLibrary();
     this.syncControls();
     requestAnimationFrame(() => this.tick());
   }
@@ -107,6 +123,14 @@ export class UI {
     (t as HTMLElement & { _h?: number })._h = window.setTimeout(() => t.classList.remove('show'), error ? 5000 : 2500);
   }
 
+  private setPrefs(patch: Partial<Prefs>): void {
+    this.prefs = { ...this.prefs, ...patch };
+    savePrefs(this.prefs);
+    applyPrefs(this.prefs);
+    setText($('#layout-btn'), `Layout: ${this.prefs.compact ? 'Compact' : 'Full'}`);
+    this.applyLibraryHeight();
+  }
+
   // ================================================================== decks
 
   private control(control: string, value: number, kind: ControlKind = 'button'): void {
@@ -117,7 +141,9 @@ export class UI {
     const deck = this.app.engine.decks[i];
     const root = $(`#deck-${i}`);
     const n = i + 1;
+    root.dataset.letter = i === 0 ? 'A' : 'B';
     root.innerHTML = `
+      <div class="platter-col"${this.prefs.platters ? '' : ' hidden'}><canvas class="platter" title="Drag to scratch, scroll to nudge"></canvas></div>
       <div class="main-col">
         <div class="info">
           <div style="min-width:0">
@@ -139,27 +165,29 @@ export class UI {
           <button class="bpm-double" title="Double the detected BPM">×2</button>
           <button class="grid-here" title="Put a downbeat at the current position">GRID</button>
         </div>
-        <div class="row">
-          <span class="label">PADS</span>
-          <select class="pad-mode">
-            <option value="hotcue">Hot cue</option>
-            <option value="beatloop">Beat loop</option>
-            <option value="beatjump">Beat jump</option>
-            <option value="sampler">Sampler</option>
-          </select>
-          <span class="muted pad-hint">right-click a pad to clear</span>
-        </div>
-        <div class="pads"></div>
-        <div class="row loops">
-          <span class="label">LOOP</span>
-          ${BEATLOOP_PAD_SIZES.map((b) => `<button data-beatloop="${b}">${fmtBeats(b)}</button>`).join('')}
-        </div>
-        <div class="row loops">
-          <button class="loop-in">IN</button><button class="loop-out">OUT</button>
-          <button class="reloop">RELOOP</button><button class="loop-half">½</button><button class="loop-double">×2</button>
-          <span class="label" style="margin-left:8px">JUMP</span>
-          <button data-jump="-16">◀16</button><button data-jump="-4">◀4</button><button data-jump="-1">◀1</button>
-          <button data-jump="1">1▶</button><button data-jump="4">4▶</button><button data-jump="16">16▶</button>
+        <div class="perf">
+          <div class="row">
+            <span class="label">PADS</span>
+            <select class="pad-mode">
+              <option value="hotcue">Hot cue</option>
+              <option value="beatloop">Beat loop</option>
+              <option value="beatjump">Beat jump</option>
+              <option value="sampler">Sampler</option>
+            </select>
+            <span class="muted pad-hint">right-click a pad to clear</span>
+          </div>
+          <div class="pads" style="margin:4px 0"></div>
+          <div class="row loops">
+            <span class="label">LOOP</span>
+            ${BEATLOOP_PAD_SIZES.map((b) => `<button data-beatloop="${b}">${fmtBeats(b)}</button>`).join('')}
+          </div>
+          <div class="row loops" style="margin-top:4px">
+            <button class="loop-in">IN</button><button class="loop-out">OUT</button>
+            <button class="reloop">RELOOP</button><button class="loop-half">½</button><button class="loop-double">×2</button>
+            <span class="label" style="margin-left:8px">JUMP</span>
+            <button data-jump="-16">◀16</button><button data-jump="-4">◀4</button><button data-jump="-1">◀1</button>
+            <button data-jump="1">1▶</button><button data-jump="4">4▶</button><button data-jump="16">16▶</button>
+          </div>
         </div>
       </div>
       <div class="pitch">
@@ -171,14 +199,32 @@ export class UI {
         <button class="nudge-up" title="Nudge faster (hold)">▶▶</button>
       </div>`;
 
-    const overviewCanvas = $<HTMLCanvasElement>('canvas.overview', root);
+    const color = i === 0 ? '#19c3ff' : '#ff3fb4';
     const zoomCanvas = $<HTMLCanvasElement>(`#zoom-${i}`);
     const ui: DeckUI = {
       root,
-      overview: new OverviewView(overviewCanvas, deck),
-      zoom: new ZoomView(zoomCanvas, deck, i === 0 ? '#3da5ff' : '#ff6b3d'),
+      overview: new OverviewView($<HTMLCanvasElement>('canvas.overview', root), deck),
+      zoom: new ZoomView(zoomCanvas, deck, color),
+      platter: new PlatterView($<HTMLCanvasElement>('canvas.platter', root), deck, color),
       padMode: 'hotcue',
       pads: [],
+      title: $('.title', root),
+      artist: $('.artist', root),
+      bpmVal: $('.bpm-val', root),
+      bpmOrig: $('.bpm-orig', root),
+      elapsed: $('.elapsed', root),
+      remain: $('.remain', root),
+      pitchVal: $('.val', root),
+      tempoVal: $('.tempo-val', root),
+      play: $('.play', root),
+      cue: $('.cue', root),
+      sync: $('.sync', root),
+      rev: $('.rev', root),
+      quant: $('.quant', root),
+      reloop: $('.reloop', root),
+      beatloops: Array.from(root.querySelectorAll<HTMLButtonElement>('[data-beatloop]')),
+      fader: $<HTMLInputElement>('.pitch-fader', root),
+      range: $<HTMLSelectElement>('.range', root),
     };
     this.decks.push(ui);
 
@@ -192,19 +238,19 @@ export class UI {
       el.addEventListener('pointerup', up);
       el.addEventListener('pointercancel', up);
     };
-    hold($('.cue', root), `deck${n}.cue`);
-    hold($('.play', root), `deck${n}.play`);
-    hold($('.sync', root), `deck${n}.sync`);
+    hold(ui.cue, `deck${n}.cue`);
+    hold(ui.play, `deck${n}.play`);
+    hold(ui.sync, `deck${n}.sync`);
     hold($('.nudge-down', root), `deck${n}.nudgeDown`);
     hold($('.nudge-up', root), `deck${n}.nudgeUp`);
-    $('.rev', root).onclick = () => deck.setReverse(!deck.reverse);
-    $('.quant', root).onclick = () => {
+    ui.rev.onclick = () => deck.setReverse(!deck.reverse);
+    ui.quant.onclick = () => {
       deck.quantize = !deck.quantize;
     };
     $('.bpm-half', root).onclick = () => deck.grid && void this.app.setDeckBpm(deck, deck.grid.bpm / 2);
     $('.bpm-double', root).onclick = () => deck.grid && void this.app.setDeckBpm(deck, deck.grid.bpm * 2);
     $('.grid-here', root).onclick = () => void this.app.setGridHere(deck);
-    root.querySelectorAll<HTMLButtonElement>('[data-beatloop]').forEach((b) => {
+    ui.beatloops.forEach((b) => {
       b.onclick = () => deck.beatloop(parseFloat(b.dataset.beatloop!));
     });
     root.querySelectorAll<HTMLButtonElement>('[data-jump]').forEach((b) => {
@@ -212,16 +258,14 @@ export class UI {
     });
     $('.loop-in', root).onclick = () => deck.loopIn();
     $('.loop-out', root).onclick = () => deck.loopOut();
-    $('.reloop', root).onclick = () => deck.reloop();
+    ui.reloop.onclick = () => deck.reloop();
     $('.loop-half', root).onclick = () => deck.loopResize(0.5);
     $('.loop-double', root).onclick = () => deck.loopResize(2);
 
-    const range = $<HTMLSelectElement>('.range', root);
-    range.value = String(deck.tempoRange);
-    range.onchange = () => deck.setTempoRange(parseFloat(range.value));
-    const fader = $<HTMLInputElement>('.pitch-fader', root);
-    fader.oninput = () => this.control(`deck${n}.tempo`, (parseFloat(fader.value) + 1) / 2, 'knob');
-    fader.ondblclick = () => this.control(`deck${n}.tempo`, 0.5, 'knob');
+    ui.range.value = String(deck.tempoRange);
+    ui.range.onchange = () => deck.setTempoRange(parseFloat(ui.range.value));
+    ui.fader.oninput = () => this.control(`deck${n}.tempo`, (parseFloat(ui.fader.value) + 1) / 2, 'knob');
+    ui.fader.ondblclick = () => this.control(`deck${n}.tempo`, 0.5, 'knob');
     $('.pitch-reset', root).onclick = () => this.control(`deck${n}.tempo`, 0.5, 'knob');
 
     // pads
@@ -230,18 +274,7 @@ export class UI {
       const b = document.createElement('button');
       padsEl.appendChild(b);
       ui.pads.push(b);
-      const padControl = () => {
-        switch (ui.padMode) {
-          case 'hotcue':
-            return `deck${n}.hotcue${p + 1}`;
-          case 'beatloop':
-            return `deck${n}.beatloop${p + 1}`;
-          case 'beatjump':
-            return `deck${n}.beatjump${p + 1}`;
-          case 'sampler':
-            return `deck${n}.sampler${p + 1}`;
-        }
-      };
+      const padControl = () => `deck${n}.${ui.padMode}${p + 1}`;
       b.addEventListener('pointerdown', (e) => {
         if (e.button !== 0) return;
         if (ui.padMode === 'hotcue' && e.shiftKey) {
@@ -271,11 +304,7 @@ export class UI {
       ui.padMode = modeSel.value as PadMode;
       setText(
         $('.pad-hint', root),
-        ui.padMode === 'hotcue'
-          ? 'right-click a pad to clear'
-          : ui.padMode === 'sampler'
-            ? 'right-click a pad to load a sample'
-            : '',
+        ui.padMode === 'hotcue' ? 'right-click a pad to clear' : ui.padMode === 'sampler' ? 'right-click to load a file · Loop Lab → Pad' : '',
       );
     };
 
@@ -291,8 +320,8 @@ export class UI {
         }
         const files = e.dataTransfer?.files;
         if (files && files.length) {
+          const f = files[0];
           void this.app.library.importFiles(Array.from(files)).then(() => {
-            const f = files[0];
             const tid = [...this.app.library.tracks.values()].find(
               (t) => t.fileName === f.name && t.size === f.size && t.lastModified === f.lastModified,
             )?.id;
@@ -321,32 +350,32 @@ export class UI {
   }
 
   private renderDeck(ui: DeckUI, deck: Deck): void {
-    const r = ui.root;
-    setText($('.title', r), deck.track?.title ?? 'No track loaded');
-    setText($('.artist', r), deck.track?.artist || (deck.track ? '' : `Deck ${deck.index === 0 ? 'A' : 'B'}`));
-    setText($('.bpm-val', r), deck.grid ? deck.effectiveBpm.toFixed(2) : '—');
-    setText($('.bpm-orig', r), deck.grid ? `orig ${deck.grid.bpm.toFixed(2)}` : deck.loaded ? 'analysing…' : '');
+    setText(ui.title, deck.track?.title ?? 'No track loaded');
+    setText(ui.artist, deck.track?.artist || (deck.track ? '' : `Deck ${deck.index === 0 ? 'A' : 'B'}`));
+    setText(ui.bpmVal, deck.grid ? deck.effectiveBpm.toFixed(2) : '—');
+    setText(ui.bpmOrig, deck.grid ? `orig ${deck.grid.bpm.toFixed(2)}` : deck.loaded ? 'analysing…' : '');
     const t = deck.time;
-    setText($('.elapsed', r), fmtTime(t));
-    setText($('.remain', r), '-' + fmtTime(deck.duration - t));
+    setText(ui.elapsed, fmtTime(t));
+    setText(ui.remain, '-' + fmtTime(deck.duration - t));
     const pct = (deck.tempoFactor - 1) * 100;
-    const pctText = `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
-    setText($('.val', r), pctText);
-    setText($('.tempo-val', r), deck.reverse ? 'REVERSE' : deck.synced ? 'SYNC' : '');
-    setClass($('.play', r), 'on', deck.playing);
-    setClass($('.cue', r), 'on', deck.loaded && Math.abs(t - deck.cuePoint) < 0.02);
-    setClass($('.sync', r), 'on', deck.synced);
-    setClass($('.rev', r), 'on', deck.reverse);
-    setClass($('.quant', r), 'on', deck.quantize);
-    setClass($('.reloop', r), 'on', deck.loopActive);
-    r.querySelectorAll<HTMLButtonElement>('[data-beatloop]').forEach((b) =>
-      setClass(b, 'on', deck.loopActive && deck.loop?.beats === parseFloat(b.dataset.beatloop!)),
-    );
-    const fader = $<HTMLInputElement>('.pitch-fader', r);
-    if (document.activeElement !== fader) fader.value = String(deck.tempoFader);
-    const range = $<HTMLSelectElement>('.range', r);
-    if (range.value !== String(deck.tempoRange)) range.value = String(deck.tempoRange);
+    setText(ui.pitchVal, `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`);
+    setText(ui.tempoVal, deck.reverse ? 'REVERSE' : deck.synced ? 'SYNC' : '');
+    setClass(ui.play, 'on', deck.playing);
+    setClass(ui.cue, 'on', deck.loaded && Math.abs(t - deck.cuePoint) < 0.02);
+    setClass(ui.sync, 'on', deck.synced);
+    setClass(ui.rev, 'on', deck.reverse);
+    setClass(ui.quant, 'on', deck.quantize);
+    setClass(ui.reloop, 'on', deck.loopActive);
+    for (const b of ui.beatloops) setClass(b, 'on', deck.loopActive && deck.loop?.beats === parseFloat(b.dataset.beatloop!));
+    if (document.activeElement !== ui.fader) {
+      const v = String(deck.tempoFader);
+      if (ui.fader.value !== v) ui.fader.value = v;
+    }
+    if (ui.range.value !== String(deck.tempoRange)) ui.range.value = String(deck.tempoRange);
+    if (!this.prefs.compact) this.renderPads(ui, deck);
+  }
 
+  private renderPads(ui: DeckUI, deck: Deck): void {
     ui.pads.forEach((b, p) => {
       let label = '';
       let bg = '';
@@ -359,7 +388,7 @@ export class UI {
         }
         case 'beatloop':
           label = `${fmtBeats(BEATLOOP_PAD_SIZES[p])} beat`;
-          bg = deck.loopActive && deck.loop?.beats === BEATLOOP_PAD_SIZES[p] ? '#3ddc84' : '';
+          bg = deck.loopActive && deck.loop?.beats === BEATLOOP_PAD_SIZES[p] ? '#b6ff3b' : '';
           break;
         case 'beatjump': {
           const j = BEATJUMP_PAD_SIZES[p];
@@ -369,7 +398,7 @@ export class UI {
         case 'sampler': {
           const s = this.app.sampler.slots[p];
           label = s ? s.name.slice(0, 12) : `+ sample ${p + 1}`;
-          bg = s ? (this.app.sampler.isPlaying(p) ? '#3ddc84' : '#a06cff') : '';
+          bg = s ? (this.app.sampler.isPlaying(p) ? '#b6ff3b' : '#c58bff') : '';
           break;
         }
       }
@@ -385,7 +414,7 @@ export class UI {
     const eng = this.app.engine;
     const m = $('#mixer');
     const knob = (ch: number, param: string, label: string) =>
-      `<label class="knob">${label}<input type="range" min="0" max="1" step="0.001" data-ch="${ch}" data-param="${param}" /></label>`;
+      `<label class="knob ${param}">${label}<input type="range" min="0" max="1" step="0.001" data-ch="${ch}" data-param="${param}" /></label>`;
     const channel = (ch: number) => `
       <div class="ch">
         ${knob(ch, 'trim', 'TRIM')}${knob(ch, 'high', 'HI')}${knob(ch, 'mid', 'MID')}${knob(ch, 'low', 'LOW')}${knob(ch, 'filter', 'FILTER')}
@@ -393,14 +422,14 @@ export class UI {
         <div class="fader"><input type="range" min="0" max="1" step="0.001" data-ch="${ch}" data-param="volume" /></div>
       </div>`;
     m.innerHTML = `
-      <h3>Mixer</h3>
+      <h3 class="section-title">Mixer</h3>
       <div class="channels">${channel(0)}<div class="meters"><canvas id="meter-0"></canvas><canvas id="meter-1"></canvas></div>${channel(1)}</div>
       <div class="xfader"><b style="color:var(--deck-a)">A</b><input id="xfader" type="range" min="0" max="1" step="0.001" /><b style="color:var(--deck-b)">B</b>
         <select id="xf-curve" title="Crossfader curve"><option value="smooth">Smooth</option><option value="linear">Linear</option><option value="sharp">Cut</option></select></div>
       <div class="xfader"><span class="muted">🎧 CUE</span><input id="hp-mix" type="range" min="0" max="1" step="0.001" title="Headphone cue/master mix" /><span class="muted">MST</span>
-        <input id="hp-level" type="range" min="0" max="1" step="0.001" title="Headphone level" style="max-width:60px" /></div>
+        <input id="hp-level" type="range" min="0" max="1" step="0.001" title="Headphone level" style="max-width:56px" /></div>
       <div class="fx">
-        <h3 class="wide">Beat FX</h3>
+        <h3 class="section-title wide" style="justify-self:start">Beat FX</h3>
         <select id="fx-type">${EFFECT_TYPES.map((t) => `<option value="${t.id}">${t.name}</option>`).join('')}</select>
         <select id="fx-target"><option value="master">Master</option><option value="deck1">Deck A</option><option value="deck2">Deck B</option></select>
         <select id="fx-beats">${BEAT_FRACTIONS.map((b) => `<option value="${b}">${fmtBeats(b)} beat</option>`).join('')}</select>
@@ -411,8 +440,7 @@ export class UI {
     m.querySelectorAll<HTMLInputElement>('input[data-param]').forEach((inp) => {
       const ch = parseInt(inp.dataset.ch!, 10);
       const param = inp.dataset.param!;
-      const controlName =
-        param === 'high' ? 'eqHigh' : param === 'mid' ? 'eqMid' : param === 'low' ? 'eqLow' : param;
+      const controlName = param === 'high' ? 'eqHigh' : param === 'mid' ? 'eqMid' : param === 'low' ? 'eqLow' : param;
       inp.oninput = () => this.control(`deck${ch + 1}.${controlName}`, parseFloat(inp.value), 'knob');
       if (param !== 'volume') inp.ondblclick = () => this.control(`deck${ch + 1}.${controlName}`, 0.5, 'knob');
     });
@@ -450,9 +478,9 @@ export class UI {
       const strip = eng.strips[parseInt(inp.dataset.ch!, 10)];
       set(inp, String(strip.values[inp.dataset.param as 'trim']));
     });
-    document.querySelectorAll<HTMLButtonElement>('#mixer button.pfl').forEach((b) =>
-      setClass(b, 'on', eng.strips[parseInt(b.dataset.ch!, 10)].values.pfl),
-    );
+    document
+      .querySelectorAll<HTMLButtonElement>('#mixer button.pfl')
+      .forEach((b) => setClass(b, 'on', eng.strips[parseInt(b.dataset.ch!, 10)].values.pfl));
     set($<HTMLInputElement>('#xfader'), String(eng.crossfader));
     set($<HTMLSelectElement>('#xf-curve'), eng.crossfaderCurve);
     set($<HTMLInputElement>('#hp-mix'), String(eng.headphoneMix));
@@ -474,22 +502,26 @@ export class UI {
     g.clearRect(0, 0, W, H);
     const db = 20 * Math.log10(Math.max(level, 1e-5));
     const v = Math.max(0, Math.min(1, (db + 48) / 48));
+    if (v <= 0) return;
     const grad = horizontal ? g.createLinearGradient(0, 0, W, 0) : g.createLinearGradient(0, H, 0, 0);
-    grad.addColorStop(0, '#3ddc84');
-    grad.addColorStop(0.75, '#ffd23f');
-    grad.addColorStop(1, '#ff4d5e');
+    grad.addColorStop(0, '#19c3ff');
+    grad.addColorStop(0.7, '#b6ff3b');
+    grad.addColorStop(1, '#ff3fb4');
     g.fillStyle = grad;
     if (horizontal) g.fillRect(0, 0, W * v, H);
     else g.fillRect(0, H * (1 - v), W, H * v);
   }
 
-  // ================================================================== top bar & dialogs
+  // ================================================================== top bar, splitter & dialogs
 
   private buildTopbar(): void {
     const eng = this.app.engine;
     $('#midi-status').onclick = () => this.openController();
-    $('#settings-btn').onclick = () => this.openSettings();
+    $('#settings-btn').onclick = () => void this.openSettings();
     $('#help-btn').onclick = () => ($('#help-dlg') as HTMLDialogElement).showModal();
+    const layout = $('#layout-btn');
+    setText(layout, `Layout: ${this.prefs.compact ? 'Compact' : 'Full'}`);
+    layout.onclick = () => this.setPrefs({ compact: !this.prefs.compact });
     const ml = $<HTMLInputElement>('#master-level');
     ml.oninput = () => eng.setMasterLevel(parseFloat(ml.value));
     $('#automix-btn').onclick = () => {
@@ -511,6 +543,43 @@ export class UI {
         }
       }
     };
+  }
+
+  /** Drag the bar between the decks and the song list to resize the list. */
+  private buildSplitter(): void {
+    const split = $('#splitter');
+    split.addEventListener('pointerdown', (e) => {
+      split.setPointerCapture(e.pointerId);
+      const startY = e.clientY;
+      const startH = $('#library').getBoundingClientRect().height;
+      const move = (ev: PointerEvent) => {
+        const h = Math.max(120, Math.min(window.innerHeight - 120, startH - (ev.clientY - startY)));
+        this.prefs.libraryHeight = Math.round(h);
+        this.applyLibraryHeight();
+      };
+      const up = () => {
+        split.removeEventListener('pointermove', move);
+        split.removeEventListener('pointerup', up);
+        savePrefs(this.prefs);
+      };
+      split.addEventListener('pointermove', move);
+      split.addEventListener('pointerup', up);
+    });
+    split.ondblclick = () => {
+      this.prefs.libraryHeight = 0;
+      this.applyLibraryHeight();
+      savePrefs(this.prefs);
+    };
+    this.applyLibraryHeight();
+  }
+
+  private applyLibraryHeight(): void {
+    const lib = $('#library');
+    const h = this.prefs.libraryHeight;
+    lib.style.flex = h > 0 ? `0 0 ${h}px` : '';
+    // when the list is given a fixed height the console scrolls instead of the list shrinking
+    $('#console').style.flex = h > 0 ? '1 1 0' : '';
+    $('#console').style.minHeight = h > 0 ? '0' : '';
   }
 
   private renderMidiStatus(): void {
@@ -650,7 +719,15 @@ export class UI {
     const body = $('#settings-body');
     const devices = await eng.listOutputDevices();
     const multiOk = eng.maxOutputChannels >= 4;
+    const p = this.prefs;
     body.innerHTML = `
+      <h3>Look &amp; feel</h3>
+      <div class="field"><span>Theme</span><select id="pref-theme">
+        <option value="endo">Endo — ocean blue, scene neon, aero gloss</option>
+        <option value="classic">Classic — plain dark</option></select></div>
+      <div class="field"><span>Jog platters</span><label class="inline"><input type="checkbox" id="pref-platters" ${p.platters ? 'checked' : ''}/> show round platters on the decks (drag to scratch)</label></div>
+      <div class="field"><span>Layout</span><label class="inline"><input type="checkbox" id="pref-compact" ${p.compact ? 'checked' : ''}/> compact decks (bigger song list)</label></div>
+      <div class="field"><span>Performance</span><label class="inline"><input type="checkbox" id="pref-lowfx" ${p.lowFx ? 'checked' : ''}/> reduce visual effects (for older laptops)</label></div>
       <h3>Audio output</h3>
       <div class="field"><span>Output device</span>
         ${
@@ -670,6 +747,18 @@ export class UI {
       <div class="field"><span>Sampler volume</span><input id="smp-vol" type="range" min="0" max="1" step="0.01" value="${this.app.sampler.volume}" /></div>
       <h3>Library</h3>
       <div class="field"><span>Tracks</span><span>${this.app.library.tracks.size}</span></div>`;
+    const theme = $<HTMLSelectElement>('#pref-theme', body);
+    theme.value = p.theme;
+    theme.onchange = () => this.setPrefs({ theme: theme.value as Prefs['theme'] });
+    const platters = $<HTMLInputElement>('#pref-platters', body);
+    platters.onchange = () => {
+      this.setPrefs({ platters: platters.checked });
+      document.querySelectorAll<HTMLElement>('.platter-col').forEach((c) => (c.hidden = !platters.checked));
+    };
+    const compact = $<HTMLInputElement>('#pref-compact', body);
+    compact.onchange = () => this.setPrefs({ compact: compact.checked });
+    const lowfx = $<HTMLInputElement>('#pref-lowfx', body);
+    lowfx.onchange = () => this.setPrefs({ lowFx: lowfx.checked });
     const mode = $<HTMLSelectElement>('#out-mode', body);
     mode.value = eng.outputMode;
     mode.onchange = () => eng.setOutputMode(mode.value as OutputMode);
@@ -720,8 +809,8 @@ export class UI {
         <tr><td>Crossfader</td><td colspan="2"><kbd>←</kbd> / <kbd>→</kbd></td></tr>
         <tr><td>Browse library / load to free deck</td><td colspan="2"><kbd>↑</kbd> / <kbd>↓</kbd> / <kbd>Enter</kbd></td></tr>
       </table>
-      <p class="muted">Mouse: drag the scrolling waveform to scrub, mouse-wheel on it to zoom, click the overview to seek,
-        double-click a knob to reset it, right-click a hot cue pad to clear it.</p>`;
+      <p class="muted">Mouse: drag the scrolling waveform to scrub (wheel = zoom), click the overview to seek, drag a platter to
+        scratch, double-click a knob to reset it, right-click a hot cue pad to clear it, drag the bar above the song list to resize it.</p>`;
     $('#controller-dlg').addEventListener('close', () => this.app.midi.mapper.cancelLearn());
   }
 
@@ -756,7 +845,8 @@ export class UI {
     };
     const isTyping = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
-      return t.tagName === 'INPUT' && (t as HTMLInputElement).type !== 'range' ? true : t.tagName === 'TEXTAREA' || t.tagName === 'SELECT';
+      if (t.tagName === 'INPUT') return (t as HTMLInputElement).type !== 'range' && (t as HTMLInputElement).type !== 'checkbox';
+      return t.tagName === 'TEXTAREA' || t.tagName === 'SELECT';
     };
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') this.app.midi.mapper.cancelLearn();
@@ -781,7 +871,7 @@ export class UI {
         case 'ArrowUp':
         case 'ArrowDown':
           e.preventDefault();
-          this.browse(e.code === 'ArrowUp' ? -1 : 1);
+          this.library.browse(e.code === 'ArrowUp' ? -1 : 1);
           break;
         case 'Enter':
           e.preventDefault();
@@ -798,288 +888,6 @@ export class UI {
     });
   }
 
-  // ================================================================== library
-
-  private buildLibrary(): void {
-    const lib = this.app.library;
-    const search = $<HTMLInputElement>('#lib-search');
-    search.oninput = () => {
-      this.search = search.value.trim().toLowerCase();
-      this.renderLibrary();
-    };
-    const folderBtn = $('#add-folder-btn');
-    if (!Library.canPickFolders) folderBtn.title = 'Needs Chrome or Edge — use "Add files" instead';
-    folderBtn.onclick = async () => {
-      if (!Library.canPickFolders) {
-        this.toast('Folder import needs Chrome or Edge. Use "Add files" instead.', true);
-        return;
-      }
-      try {
-        const n = await lib.importFolder();
-        this.toast(`Added ${n} tracks.`);
-      } catch (e) {
-        if ((e as Error).name !== 'AbortError') this.toast(`Import failed: ${(e as Error).message}`, true);
-      }
-    };
-    const fileInput = $<HTMLInputElement>('#file-input');
-    $('#add-files-btn').onclick = () => fileInput.click();
-    fileInput.onchange = async () => {
-      if (fileInput.files) {
-        const n = await lib.importFiles(Array.from(fileInput.files));
-        this.toast(`Added ${n} tracks.`);
-      }
-      fileInput.value = '';
-    };
-    $('#analyze-btn').onclick = async () => {
-      const status = $('#lib-status');
-      await this.app.analyseLibrary((d, t) => setText(status, `Analysing ${d}/${t}…`));
-      setText(status, '');
-      this.toast('BPM analysis finished.');
-    };
-
-    const wrap = $('#lib-table-wrap');
-    wrap.addEventListener('dragover', (e) => {
-      if (e.dataTransfer?.types.includes('Files')) {
-        e.preventDefault();
-        wrap.classList.add('dragover');
-      }
-    });
-    wrap.addEventListener('dragleave', () => wrap.classList.remove('dragover'));
-    wrap.addEventListener('drop', async (e) => {
-      wrap.classList.remove('dragover');
-      if (!e.dataTransfer?.files.length) return;
-      e.preventDefault();
-      const n = await lib.importFiles(Array.from(e.dataTransfer.files));
-      this.toast(`Added ${n} tracks.`);
-    });
-  }
-
-  private currentTracks(): { id: string; rec: TrackRecord; index: number; playedAt?: number }[] {
-    const lib = this.app.library;
-    let list: { id: string; rec: TrackRecord; index: number; playedAt?: number }[];
-    if (this.view === 'all') {
-      list = [...lib.tracks.values()].map((rec, index) => ({ id: rec.id, rec, index }));
-    } else if (this.view === HISTORY_ID) {
-      list = lib
-        .sessionHistory()
-        .map((h, index) => ({ id: h.trackId, rec: lib.tracks.get(h.trackId)!, index, playedAt: h.playedAt }))
-        .filter((x) => x.rec);
-    } else {
-      const p = lib.playlist(this.view);
-      list = (p?.trackIds ?? [])
-        .map((id, index) => ({ id, rec: lib.tracks.get(id)!, index }))
-        .filter((x) => x.rec);
-    }
-    if (this.search) {
-      const q = this.search;
-      list = list.filter(
-        (x) =>
-          x.rec.title.toLowerCase().includes(q) ||
-          x.rec.artist.toLowerCase().includes(q) ||
-          x.rec.fileName.toLowerCase().includes(q) ||
-          (x.rec.bpm > 0 && x.rec.bpm.toFixed(0).startsWith(q)),
-      );
-    }
-    if (this.view === 'all') {
-      const k = this.sortKey;
-      list.sort((a, b) => {
-        const va = a.rec[k];
-        const vb = b.rec[k];
-        if (typeof va === 'string' && typeof vb === 'string') return va.localeCompare(vb) * this.sortDir;
-        return ((va as number) - (vb as number)) * this.sortDir;
-      });
-    }
-    return list;
-  }
-
-  renderLibrary(): void {
-    const lib = this.app.library;
-    // sidebar
-    const side = $('#lib-sidebar');
-    const item = (id: string, name: string, count: number | string, droppable: boolean) =>
-      `<div class="item ${this.view === id ? 'active' : ''}" data-view="${esc(id)}" ${droppable ? 'data-drop="1"' : ''}>
-        <span>${esc(name)}</span><span class="count">${count}</span></div>`;
-    side.innerHTML =
-      item('all', '🎵 All tracks', lib.tracks.size, false) +
-      item(HISTORY_ID, '🕘 History (this session)', lib.sessionHistory().length, false) +
-      '<div class="muted" style="padding:8px 8px 2px">PLAYLISTS / SETLISTS</div>' +
-      lib.playlists.map((p) => item(p.id, (p.id === AUTOMIX_ID ? '🔁 ' : '📃 ') + p.name, p.trackIds.length, true)).join('') +
-      '<div class="item" id="new-playlist"><span>＋ New playlist</span></div>';
-    side.querySelectorAll<HTMLElement>('[data-view]').forEach((el) => {
-      el.onclick = () => {
-        this.view = el.dataset.view!;
-        this.renderLibrary();
-      };
-      if (el.dataset.drop) {
-        el.addEventListener('dragover', (e) => {
-          if (e.dataTransfer?.types.includes('application/x-endodj-track')) {
-            e.preventDefault();
-            el.classList.add('drop');
-          }
-        });
-        el.addEventListener('dragleave', () => el.classList.remove('drop'));
-        el.addEventListener('drop', (e) => {
-          el.classList.remove('drop');
-          const id = e.dataTransfer?.getData('application/x-endodj-track');
-          if (id) {
-            e.preventDefault();
-            void lib.addToPlaylist(el.dataset.view!, [id]);
-          }
-        });
-      }
-      if (el.dataset.view !== 'all' && el.dataset.view !== HISTORY_ID && el.dataset.view !== AUTOMIX_ID) {
-        el.ondblclick = () => {
-          const name = prompt('Rename playlist', lib.playlist(el.dataset.view!)?.name);
-          if (name) void lib.renamePlaylist(el.dataset.view!, name);
-        };
-      }
-    });
-    $('#new-playlist').onclick = async () => {
-      const name = prompt('Playlist name', `Set ${new Date().toLocaleDateString()}`);
-      if (name) {
-        const p = await lib.createPlaylist(name);
-        this.view = p.id;
-        this.renderLibrary();
-      }
-    };
-
-    // export / playlist tools
-    const isList = this.view !== 'all';
-    const exp = $('#lib-export');
-    const playlist = lib.playlist(this.view);
-    exp.innerHTML = isList
-      ? `Export: <button data-exp="txt">TXT</button><button data-exp="m3u">M3U</button><button data-exp="csv">CSV</button>
-         ${playlist && playlist.id !== AUTOMIX_ID ? '<button id="del-playlist">Delete playlist</button>' : ''}`
-      : `<select id="add-to"><option value="">Add selected to…</option>${lib.playlists.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select>`;
-    exp.querySelectorAll<HTMLButtonElement>('[data-exp]').forEach((b) => {
-      b.onclick = () => this.exportCurrent(b.dataset.exp as 'txt' | 'm3u' | 'csv');
-    });
-    exp.querySelector<HTMLButtonElement>('#del-playlist')?.addEventListener('click', () => {
-      if (playlist && confirm(`Delete playlist "${playlist.name}"?`)) {
-        void lib.deletePlaylist(playlist.id);
-        this.view = 'all';
-      }
-    });
-    const addTo = exp.querySelector<HTMLSelectElement>('#add-to');
-    if (addTo)
-      addTo.onchange = () => {
-        if (addTo.value && this.app.selectedTrackId) {
-          void lib.addToPlaylist(addTo.value, [this.app.selectedTrackId]);
-          this.toast('Added to playlist.');
-        } else if (addTo.value) this.toast('Select a track first.', true);
-        addTo.value = '';
-      };
-
-    // table
-    const list = this.currentTracks();
-    this.rows = list.map((x) => x.id);
-    const head = $('#lib-table thead');
-    const sortable = (k: keyof TrackRecord, label: string) =>
-      `<th data-sort="${k}">${label}${this.view === 'all' && this.sortKey === k ? (this.sortDir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
-    head.innerHTML = `<tr>${this.view === HISTORY_ID ? '<th>Played</th>' : '<th>#</th>'}${sortable('title', 'Title')}${sortable('artist', 'Artist')}${sortable('bpm', 'BPM')}${sortable('duration', 'Time')}${sortable('playCount', 'Plays')}<th></th></tr>`;
-    head.querySelectorAll<HTMLElement>('[data-sort]').forEach((th) => {
-      th.onclick = () => {
-        if (this.view !== 'all') return;
-        const k = th.dataset.sort as keyof TrackRecord;
-        if (this.sortKey === k) this.sortDir = -this.sortDir;
-        else {
-          this.sortKey = k;
-          this.sortDir = 1;
-        }
-        this.renderLibrary();
-      };
-    });
-    const loaded = this.app.engine.decks.map((d) => d.track?.id);
-    const inPlaylist = !!playlist;
-    $('#lib-table tbody').innerHTML = list
-      .map((x, i) => {
-        const r = x.rec;
-        const cls = [
-          this.app.selectedTrackId === x.id ? 'selected' : '',
-          lib.isAvailable(x.id) ? '' : 'unavailable',
-          loaded[0] === x.id ? 'loaded-0' : '',
-          loaded[1] === x.id ? 'loaded-1' : '',
-        ].join(' ');
-        const first = x.playedAt ? new Date(x.playedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : String(i + 1);
-        return `<tr class="${cls}" draggable="true" data-id="${esc(x.id)}" data-index="${x.index}">
-          <td class="muted">${first}</td><td title="${esc(r.fileName)}">${esc(r.title)}</td><td>${esc(r.artist)}</td>
-          <td class="mono">${r.bpm > 0 ? r.bpm.toFixed(1) : ''}</td><td class="mono">${r.duration ? formatDuration(r.duration) : ''}</td>
-          <td class="mono">${r.playCount || ''}</td>
-          <td><button data-load="0" title="Load to deck A">A</button><button data-load="1" title="Load to deck B">B</button>
-            <button data-queue title="Add to Automix queue">Q</button>
-            ${inPlaylist ? '<button data-up title="Move up">↑</button><button data-down title="Move down">↓</button><button data-remove title="Remove from playlist">✕</button>' : ''}
-          </td></tr>`;
-      })
-      .join('');
-    setText(
-      $('#lib-empty'),
-      list.length
-        ? ''
-        : this.view === 'all'
-          ? lib.tracks.size
-            ? 'No tracks match your search.'
-            : 'Your library is empty. Click "Add folder" (Chrome/Edge) or "Add files", or drop audio files here.'
-          : 'Nothing here yet. Drag tracks from "All tracks" onto a playlist in the sidebar.',
-    );
-    $('#lib-table tbody')
-      .querySelectorAll<HTMLTableRowElement>('tr')
-      .forEach((tr) => {
-        const id = tr.dataset.id!;
-        const index = parseInt(tr.dataset.index!, 10);
-        tr.onclick = (e) => {
-          const t = e.target as HTMLElement;
-          if (t.dataset.load !== undefined) void this.app.loadTrack(parseInt(t.dataset.load, 10), id);
-          else if (t.dataset.queue !== undefined) {
-            void lib.addToPlaylist(AUTOMIX_ID, [id]);
-            this.toast('Added to Automix queue.');
-          } else if (t.dataset.up !== undefined) void lib.moveInPlaylist(this.view, index, index - 1);
-          else if (t.dataset.down !== undefined) void lib.moveInPlaylist(this.view, index, index + 1);
-          else if (t.dataset.remove !== undefined) void lib.removeFromPlaylist(this.view, index);
-          else {
-            this.app.selectedTrackId = id;
-            this.renderLibrary();
-          }
-        };
-        tr.ondblclick = (e) => {
-          if ((e.target as HTMLElement).tagName === 'BUTTON') return;
-          this.app.selectedTrackId = id;
-          this.app.loadSelectedToFreeDeck();
-        };
-        tr.ondragstart = (e) => {
-          e.dataTransfer?.setData('application/x-endodj-track', id);
-          if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy';
-        };
-      });
-  }
-
-  private browse(delta: number): void {
-    if (!this.rows.length) return;
-    const cur = this.app.selectedTrackId ? this.rows.indexOf(this.app.selectedTrackId) : -1;
-    const next = Math.max(0, Math.min(this.rows.length - 1, cur + delta));
-    this.app.selectedTrackId = this.rows[next];
-    this.renderLibrary();
-    document.querySelector('#lib-table tr.selected')?.scrollIntoView({ block: 'nearest' });
-  }
-
-  private exportCurrent(fmt: 'txt' | 'm3u' | 'csv'): void {
-    const lib = this.app.library;
-    const list = this.currentTracks();
-    const tracks: ExportTrack[] = list.map((x) => ({
-      title: x.rec.title,
-      artist: x.rec.artist,
-      bpm: x.rec.bpm,
-      duration: x.rec.duration,
-      path: x.rec.path,
-      playedAt: x.playedAt,
-    }));
-    const name =
-      this.view === HISTORY_ID ? `EndoDJ set ${new Date().toLocaleDateString()}` : (lib.playlist(this.view)?.name ?? 'Playlist');
-    const file = name.replace(/[^\w\- ]+/g, '_');
-    if (fmt === 'txt') download(`${file}.txt`, toText(name, tracks));
-    else if (fmt === 'm3u') download(`${file}.m3u`, toM3U(tracks), 'audio/x-mpegurl');
-    else download(`${file}.csv`, toCSV(tracks), 'text/csv');
-  }
-
   // ================================================================== render loop
 
   private tick(): void {
@@ -1089,10 +897,11 @@ export class UI {
       this.renderDeck(ui, deck);
       ui.overview.draw();
       ui.zoom.draw();
+      if (this.prefs.platters) ui.platter.draw();
     });
-    this.drawMeter($<HTMLCanvasElement>('#meter-0'), meterLevel(eng.strips[0].meter, this.meterBuf));
-    this.drawMeter($<HTMLCanvasElement>('#meter-1'), meterLevel(eng.strips[1].meter, this.meterBuf));
-    this.drawMeter($<HTMLCanvasElement>('#master-meter'), meterLevel(eng.masterMeter, this.meterBuf), true);
+    this.drawMeter(this.meters[0], meterLevel(eng.strips[0].meter, this.meterBuf));
+    this.drawMeter(this.meters[1], meterLevel(eng.strips[1].meter, this.meterBuf));
+    this.drawMeter(this.meters[2], meterLevel(eng.masterMeter, this.meterBuf), true);
     setClass($('#rec-btn'), 'on', eng.recording);
     setText($('#rec-time'), eng.recording ? fmtTime((performance.now() - this.recStart) / 1000) : '');
     if (++this.frame % 15 === 0) this.syncControls();
