@@ -8,6 +8,9 @@
 
 - Read `docs/HANDOFF.md` first: architecture, code map, hardware checklist, next steps.
 - Before pushing: `npm run typecheck && npm test && npm run build`.
+- Every push to `main` or the development branch publishes a GitHub Release (`.github/workflows/desktop.yml`),
+  and the installed desktop app updates itself from it. Keep it that way: after each change, push so the user
+  can update; check the Release appeared (tag `v0.2.<run>`, with `latest.yml`).
 - Keep DSP / math / MIDI / library logic in pure, unit-tested modules; keep Web Audio and DOM glue thin.
 - Never claim DDJ-FLX2 behaviour that has not been verified on real hardware.
 - Bundled audio must allow redistribution (CC0, CC-BY or own work). Record source, author and licence in `docs/THIRD_PARTY.md`.

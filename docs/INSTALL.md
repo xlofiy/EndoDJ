@@ -23,7 +23,9 @@ Installed apps update themselves (Windows installer and Linux AppImage):
 - EndoDJ checks the latest Release when it starts and every 4 hours, downloads new versions in the
   background, and installs them when you restart (or quit). A **Restart to update** button appears in the
   top bar when one is ready; Settings → General shows the version and a **Check for updates** button.
-- Updates come only from merged changes on `main`, never from work-in-progress branches.
+- Every push to `main` or the development branch is published as a Release, so the app updates after every change.
+- Updating replaces the old version: the installer removes the previous version's program files, and EndoDJ
+  deletes the downloaded update installer on its next start. Your library, cues, playlists and settings stay.
 - The `.deb` package does not self-update — reinstall it, or use the AppImage.
 
 ### "Unknown publisher" warnings

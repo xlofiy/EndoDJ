@@ -9,6 +9,7 @@
  */
 const { app, BrowserWindow, dialog, ipcMain, net, protocol, session, shell } = require('electron');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { AUDIO_EXTENSIONS, isAudioPath, isInside, mayRead } = require('./paths.cjs');
@@ -152,7 +153,21 @@ function checkForUpdates() {
   autoUpdater.checkForUpdates().catch((e) => setUpdate({ status: 'error', error: String(e?.message ?? e) }));
 }
 
+/**
+ * Delete installers downloaded for earlier updates (electron-updater keeps them in
+ * <cache>/endodj-updater/pending). The NSIS installer itself removes the old version's program
+ * files when it updates; the library and settings (userData) are never touched.
+ */
+function cleanUpdateCache() {
+  const base = process.platform === 'win32' ? process.env.LOCALAPPDATA : path.join(os.homedir(), '.cache');
+  if (!base) return;
+  fs.rm(path.join(base, 'endodj-updater', 'pending'), { recursive: true, force: true }, (e) => {
+    if (e) console.error('Could not clean the update cache', e);
+  });
+}
+
 function setupUpdates() {
+  if (app.isPackaged) cleanUpdateCache(); // a pending update was installed on the last quit
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.on('checking-for-update', () => setUpdate({ status: 'checking', error: null }));

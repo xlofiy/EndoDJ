@@ -1,13 +1,14 @@
 name: Desktop installers
 # Builds the EndoDJ desktop app for Windows (.exe installer) and Linux (.AppImage / .deb).
 # - Pull requests: installers as run artifacts, for testing.
-# - Every push to main, version tags and manual runs (Actions → Run workflow): a GitHub Release. Installed apps auto-update from the
+# - Every push to main or the development branch, version tags and manual runs: a GitHub Release,
+#   so the installed app updates itself after every change. Installed apps auto-update from the
 #   latest Release (electron-updater reads latest.yml / latest-linux.yml from it).
 on:
   workflow_dispatch:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, claude/epic-dijkstra-m4lk0o]
     tags: ['v*']
 
 permissions:
