@@ -27,8 +27,8 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not started
 - [x] Keyboard shortcuts
 
 ## Phase 2 — Pro features
-- [ ] Key detection (Camelot notation) + harmonic-mix hints
-- [ ] Key lock / master tempo (pitch-preserving time-stretch, WSOLA in the worklet)
+- [x] Key detection (Camelot notation) + harmonic-mix hints (key chip turns green when decks match)
+- [~] Key lock / master tempo and key shift — granular pitch shifter in the worklet; upgrade to WSOLA/phase vocoder for studio quality
 - [x] Sampler (pads mode) with user-loadable samples
 - [ ] Slicer / beat roll / pad FX
 - [x] Quantize for cues & loops
@@ -41,7 +41,8 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not started
 - [x] Loop Lab: built-in genre loops + FX one-shots, preview, load to deck/pads, loop-pack import
 - [x] Themes (Endo / Classic), round jog platters, compact layout, resizable song list
 - [x] Virtualised song list (tested with 20 000 tracks)
-- [ ] More Loop Lab content: curated CC0 packs from Freesound/OpenGameArt (needs network access + licence review)
+- [x] CC0 loops & FX from OpenGameArt (5 loops, 12 FX), verified and credited
+- [ ] More CC0 content from Freesound (needs a Freesound API key)
 - [ ] Code-signed installers (Windows certificate, Apple Developer ID) and auto-update
 
 ## Phase 3 — Beyond

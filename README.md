@@ -31,10 +31,11 @@ plug in the DDJ-FLX2 and allow MIDI access when the browser asks. Click **Add fo
 
 ## Features
 
-- **Loop Lab** — 18 original loops (EDM, rave, techno, scene, breakcore, hyperpop) + 8 FX one-shots
-  (air horn, riser, impact, laser, siren…), free to use anywhere; seamless looping, exact beat grid,
-  auto-sync to the playing deck, send to sampler pads, import your own loop packs (BPM read from file names)
-- **Look** — "Endo" theme (ocean-blue slanted headings, scene neon, aero gloss) or Classic; optional round
+- **Loop Lab** — CC0 loops & FX from OpenGameArt plus 18 original loops (EDM, rave, techno, scene,
+  breakcore, hyperpop) and 8 FX one-shots, free to use anywhere; seamless looping, exact beat grid,
+  **auto BPM + key match** to the playing deck, send to sampler pads, import your own loop packs
+- **Key** — automatic key detection (Camelot), key shift, KEY SYNC, key lock (master tempo)
+- **Look** — "Aero Scene" theme (Frutiger Aero / Windows Vista glass + scene neon) or Classic; optional round
   jog platters (drag to scratch); compact layout and a resizable song list; "reduce effects" for older laptops
 - **2 decks** — waveform overview + scrolling beat-grid waveform, CDJ-style CUE, play, reverse,
   pitch fader (±6/10/16/50 %), nudge, scratch & pitch-bend with the jog wheels
@@ -62,4 +63,8 @@ See [`docs/HANDOFF.md`](docs/HANDOFF.md) for the architecture and code map.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). Bundled sounds are CC0; third-party notices in
+[`docs/THIRD_PARTY.md`](docs/THIRD_PARTY.md).
+
+Contributors (human or AI) follow the rules in [`AGENTS.md`](AGENTS.md), based on
+[Ponytail](https://github.com/dietrichgebert/ponytail).

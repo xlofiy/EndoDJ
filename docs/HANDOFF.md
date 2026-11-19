@@ -46,6 +46,21 @@ FX → history → automix crossfade), with no console errors:
   The Electron binary could not be downloaded in the build environment, so the desktop app itself
   was verified only through CI builds — **test-run the installer on a real machine**.
 
+## Session 3 additions
+- **Ponytail** (https://github.com/dietrichgebert/ponytail, MIT): its agent ruleset lives in
+  `AGENTS.md` (loaded by `CLAUDE.md`), so every future AI session follows it. A Ponytail-style audit
+  was run; fixed: duplicate per-deck track memory, per-track startup reads, silent Loop Lab load
+  failures, untested deck logic (`tests/deck.test.ts`), dead `removeTrack` (now wired), MIDI monitor
+  redraw rate.
+- **Key**: `src/audio/key.ts` (harmonic-folded chromagram + EDM key profiles, Camelot, key-sync
+  math), `src/audio/pitch-shift.ts` (granular pitch shifter in the worklet → key shift independent of
+  tempo, key lock). Deck key row: chip, ♭/♯/0, KEY SYNC, KEY LOCK (also MIDI-learnable). Loop Lab
+  loops auto-match the playing deck's BPM **and** key.
+- **CC0 sounds**: 5 loops + 12 FX from OpenGameArt in `public/loops/`, credited in
+  `docs/THIRD_PARTY.md` with how they were cut and verified. Freesound needs an API key (not set up).
+- **Look**: "Aero Scene" theme (Vista glass + scene neon) — CSS in `src/style.css`, scoped to
+  `[data-theme='endo']`.
+
 ## ⚠️ Hardware verification checklist (needs the real DDJ-FLX2)
 Nothing below has been tested on the physical controller yet:
 1. **MIDI mapping** (`src/midi/ddj-flx2.ts`) — based on Pioneer's DDJ-FLX4/DDJ-400 layout.
@@ -78,6 +93,8 @@ Nothing below has been tested on the physical controller yet:
 | `src/audio/deck-processor.ts` | AudioWorklet wrapper around `player-core.ts` |
 | `src/audio/player-core.ts` | Playback DSP (pure, tested) |
 | `src/audio/bpm.ts` | BPM + beat-grid detection (pure, tested) |
+| `src/audio/key.ts` | Key detection, Camelot, key-sync math (pure, tested) |
+| `src/audio/pitch-shift.ts` | Real-time pitch shifter for key shift / key lock (pure, tested) |
 | `src/audio/waveform.ts` / `analysis-worker.ts` | Waveform summary + analysis worker |
 | `src/audio/effects.ts` | Beat FX implementations |
 | `src/audio/mixmath.ts` | Crossfader/EQ/filter laws, sync & quantize math (pure, tested) |
@@ -119,4 +136,6 @@ These are the contract between MIDI, keyboard and UI (`App.handleControl`).
 ## Progress log
 - Session 1: complete v0.1 feature set (see "Current state"); hardware verification pending.
 - Session 2: Loop Lab, BPM detection rewrite, new theme/platters/compact layout, virtualised list,
-  Electron desktop app + CI installers. Open question from the owner: "ponytail" (unclear what it refers to).
+  Electron desktop app + CI installers.
+- Session 3: Ponytail rules + audit fixes, key detection / shift / lock / sync, bundled CC0 loops & FX,
+  Aero Scene (Vista) theme.
