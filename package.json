@@ -5,16 +5,93 @@
   "private": true,
   "type": "module",
   "license": "MIT",
+  "author": {
+    "name": "EndoDJ contributors"
+  },
+  "homepage": "https://github.com/xlofiy/EndoDJ",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "desktop": "vite build && electron .",
+    "dist": "vite build && electron-builder --publish never"
   },
   "devDependencies": {
+    "electron": "45.2.3",
+    "electron-builder": "26.18.1",
     "typescript": "~5.9.3",
     "vite": "^8.3.8",
     "vitest": "^5.1.1"
+  },
+  "build": {
+    "appId": "io.github.xlofiy.endodj",
+    "productName": "EndoDJ",
+    "copyright": "Copyright \u00a9 EndoDJ contributors \u2014 MIT License",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "npmRebuild": false,
+    "artifactName": "EndoDJ-${version}-${os}-${arch}.${ext}",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "EndoDJ"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "category": "public.app-category.music",
+      "icon": "build/icon.png"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Audio",
+      "icon": "build/icon.png",
+      "maintainer": "EndoDJ contributors",
+      "synopsis": "Free DJ software for the DDJ-FLX2"
+    }
   }
 }

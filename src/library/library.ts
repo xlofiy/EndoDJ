@@ -18,6 +18,22 @@ type DirHandle = FileSystemDirectoryHandle & FSHandlePermission & {
 };
 type FileHandle = FileSystemFileHandle & FSHandlePermission;
 
+/** API exposed by the desktop app's preload script (undefined in the browser). */
+export interface NativeFile {
+  path: string;
+  name: string;
+  size: number;
+  lastModified: number;
+  relativePath: string;
+}
+interface NativeAPI {
+  platform: string;
+  pickFolder(): Promise<{ root: string | null; files: NativeFile[] } | null>;
+  pickFiles(): Promise<{ root: string | null; files: NativeFile[] } | null>;
+  readFile(path: string): Promise<ArrayBuffer>;
+}
+export const native: NativeAPI | undefined = (window as unknown as { endodjNative?: NativeAPI }).endodjNative;
+
 export const HISTORY_ID = '__history__';
 export const AUTOMIX_ID = '__automix__';
 
@@ -53,7 +69,51 @@ export class Library {
   }
 
   static get canPickFolders(): boolean {
-    return 'showDirectoryPicker' in window;
+    return !!native || 'showDirectoryPicker' in window;
+  }
+
+  private newRecord(id: string, name: string, size: number, lastModified: number, path: string): TrackRecord {
+    const { artist, title } = parseFileName(name);
+    return {
+      id,
+      fileName: name,
+      title,
+      artist,
+      size,
+      lastModified,
+      duration: 0,
+      bpm: 0,
+      firstBeat: 0,
+      bpmConfidence: 0,
+      cuePoint: 0,
+      hotcues: [],
+      addedAt: Date.now(),
+      playCount: 0,
+      lastPlayed: 0,
+      path,
+    };
+  }
+
+  /** Desktop app: add files picked in a native dialog (persist across restarts by path). */
+  private async addNative(files: NativeFile[]): Promise<number> {
+    const added: TrackRecord[] = [];
+    for (const f of files) {
+      const id = trackId(f.name, f.size, f.lastModified);
+      const rec = this.tracks.get(id) ?? this.newRecord(id, f.name, f.size, f.lastModified, f.relativePath);
+      rec.nativePath = f.path;
+      this.tracks.set(id, rec);
+      added.push(rec);
+    }
+    await this.db.putMany('tracks', added);
+    this.emit();
+    return added.length;
+  }
+
+  /** "Add files": native dialog in the desktop app; returns null in the browser (use <input>). */
+  async importFilesNative(): Promise<number | null> {
+    if (!native) return null;
+    const res = await native.pickFiles();
+    return res ? this.addNative(res.files) : 0;
   }
 
   // ------------------------------------------------------------------ importing
@@ -62,25 +122,7 @@ export class Library {
     const id = trackId(file.name, file.size, file.lastModified);
     let rec = this.tracks.get(id);
     if (!rec) {
-      const { artist, title } = parseFileName(file.name);
-      rec = {
-        id,
-        fileName: file.name,
-        title,
-        artist,
-        size: file.size,
-        lastModified: file.lastModified,
-        duration: 0,
-        bpm: 0,
-        firstBeat: 0,
-        bpmConfidence: 0,
-        cuePoint: 0,
-        hotcues: [],
-        addedAt: Date.now(),
-        playCount: 0,
-        lastPlayed: 0,
-        path,
-      };
+      rec = this.newRecord(id, file.name, file.size, file.lastModified, path);
       this.tracks.set(id, rec);
     }
     if (handle) {
@@ -106,6 +148,10 @@ export class Library {
 
   /** Import a whole folder (recursively) with the File System Access API. */
   async importFolder(): Promise<number> {
+    if (native) {
+      const res = await native.pickFolder();
+      return res ? this.addNative(res.files) : 0;
+    }
     const picker = (window as unknown as { showDirectoryPicker: (o?: object) => Promise<DirHandle> }).showDirectoryPicker;
     const dir = await picker({ id: 'endodj-music', mode: 'read' });
     const added: TrackRecord[] = [];
@@ -127,6 +173,7 @@ export class Library {
 
   /** Is the audio for this track reachable right now (without a permission prompt)? */
   isAvailable(id: string): boolean {
+    if (native && this.tracks.get(id)?.nativePath) return true;
     return this.memoryFiles.has(id) || this.handles.has(id) || this.storedHandleIds.has(id);
   }
 
@@ -148,6 +195,11 @@ export class Library {
   async getFile(id: string): Promise<File> {
     const mem = this.memoryFiles.get(id);
     if (mem) return mem;
+    const rec = this.tracks.get(id);
+    if (native && rec?.nativePath) {
+      const buf = await native.readFile(rec.nativePath);
+      return new File([buf], rec.fileName, { lastModified: rec.lastModified });
+    }
     const h = this.handles.get(id);
     if (!h) throw new Error('The audio file for this track is not available. Re-import its folder.');
     if (h.queryPermission && (await h.queryPermission({ mode: 'read' })) !== 'granted') {

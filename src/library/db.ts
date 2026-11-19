@@ -18,6 +18,8 @@ export interface TrackRecord {
   lastPlayed: number;
   /** relative path inside the imported folder, if known */
   path: string;
+  /** absolute file path (desktop app only) */
+  nativePath?: string;
 }
 
 export interface PlaylistRecord {

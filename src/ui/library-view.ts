@@ -91,7 +91,11 @@ export class LibraryView {
       }
     };
     const fileInput = el<HTMLInputElement>('#file-input');
-    el('#add-files-btn').onclick = () => fileInput.click();
+    el('#add-files-btn').onclick = async () => {
+      const n = await lib.importFilesNative(); // desktop app: native dialog, remembered by path
+      if (n === null) fileInput.click();
+      else if (n > 0) this.toast(`Added ${n} tracks.`);
+    };
     fileInput.onchange = async () => {
       if (fileInput.files) {
         const n = await lib.importFiles(Array.from(fileInput.files));
