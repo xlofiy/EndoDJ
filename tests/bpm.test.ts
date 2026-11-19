@@ -49,6 +49,20 @@ describe('detectBeatGrid', () => {
     });
   }
 
+  it('reports exact integer BPM for a clean kick track (no noise)', () => {
+    for (const bpm of [124, 128]) {
+      const n = 40 * SR;
+      const x = new Float32Array(n);
+      for (let t = 0.25; t < 40; t += 60 / bpm) {
+        const i0 = Math.round(t * SR);
+        for (let k = 0; k < SR * 0.15 && i0 + k < n; k++) {
+          x[i0 + k] += 0.7 * Math.exp(-k / (SR * 0.03)) * Math.sin((2 * Math.PI * 60 * k) / SR);
+        }
+      }
+      expect(detectBeatGrid([x], SR).bpm).toBe(bpm);
+    }
+  });
+
   it('returns 0 for very short audio', () => {
     expect(detectBeatGrid([new Float32Array(1000)], SR).bpm).toBe(0);
   });

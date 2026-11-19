@@ -276,7 +276,7 @@ canvas.zoom {
   border-color: transparent;
 }
 .deck .pitch {
-  grid-row: 1 / span 7;
+  grid-row: 1;
   grid-column: 2;
   display: flex;
   flex-direction: column;
@@ -291,6 +291,11 @@ canvas.zoom {
 }
 .deck .pitch .val {
   font-size: 11px;
+}
+.deck .pitch select {
+  width: 100%;
+  font-size: 11px;
+  padding: 2px 0;
 }
 .deck .pitch button {
   padding: 2px 6px;
@@ -358,9 +363,13 @@ canvas.zoom {
   display: flex;
   justify-content: center;
 }
+#mixer .meters {
+  align-items: flex-end;
+  gap: 2px;
+}
 #mixer .meters canvas {
-  width: 22px;
-  height: 100%;
+  width: 9px;
+  height: 180px;
   background: #000;
   border-radius: 3px;
 }

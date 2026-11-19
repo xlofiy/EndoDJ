@@ -79,7 +79,13 @@ export function onsetEnvelope(
     const v = env[f] - mean;
     out[f] = v > 0 ? v : 0;
   }
-  return { env: out, envRate };
+  // light binomial smoothing ([1 4 6 4 1]/16) so comb scores vary smoothly with tempo and phase
+  const sm = new Float32Array(frames);
+  for (let f = 0; f < frames; f++) {
+    const at = (i: number) => (i >= 0 && i < frames ? out[i] : 0);
+    sm[f] = (at(f - 2) + 4 * at(f - 1) + 6 * out[f] + 4 * at(f + 1) + at(f + 2)) / 16;
+  }
+  return { env: sm, envRate };
 }
 
 /** Linear interpolation of the envelope at a fractional index. */
@@ -92,7 +98,7 @@ function envAt(env: Float32Array, idx: number): number {
 
 /**
  * Comb score for a tempo: for the best phase, the mean envelope value on the beat grid.
- * Phases are tested at envelope resolution.
+ * Phases are tested in half envelope-frame steps.
  */
 export function combScore(
   env: Float32Array,
@@ -100,15 +106,16 @@ export function combScore(
   bpm: number,
 ): { score: number; phase: number } {
   const period = (60 / bpm) * envRate; // in envelope frames
-  const steps = Math.max(1, Math.floor(period));
+  const PHASE_STEP = 0.5; // envelope frames
+  const steps = Math.max(1, Math.floor(period / PHASE_STEP));
   let best = -1;
   let bestPhase = 0;
-  for (let p = 0; p < steps; p++) {
+  for (let step = 0; step < steps; step++) {
+    const p = step * PHASE_STEP;
     let sum = 0;
     let count = 0;
     for (let idx = p; idx < env.length - 1; idx += period) {
-      // take the max of a small neighbourhood to tolerate jitter
-      sum += Math.max(envAt(env, idx - 1), envAt(env, idx), envAt(env, idx + 1));
+      sum += envAt(env, idx);
       count++;
     }
     const s = count ? sum / count : 0;
@@ -202,11 +209,12 @@ export function detectBeatGrid(
   bpm = search(bpm, 0.06, 0.01);
 
   // snap to an integer BPM if it scores (practically) as well — most dance music is integer BPM
+  // (within 0.05 BPM the grid drifts by only a few ms over a whole track, below comb resolution)
   const rounded = Math.round(bpm);
-  if (Math.abs(rounded - bpm) <= 0.1) {
+  if (Math.abs(rounded - bpm) <= 0.05) {
     const sR = combScore(env, envRate, rounded).score;
     const sB = combScore(env, envRate, bpm).score;
-    if (sR >= sB * 0.98) bpm = rounded;
+    if (sR >= sB * 0.95) bpm = rounded;
   }
   bpm = Math.round(bpm * 100) / 100;
 

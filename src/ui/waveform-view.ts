@@ -123,7 +123,7 @@ export class ZoomView {
       if (!this.dragging) return;
       const dx = e.clientX - this.dragging.x;
       this.dragging.x = e.clientX;
-      const secPerPx = (this.span * 2) / canvas.clientWidth;
+      const secPerPx = (this.span * 2 * Math.abs(this.deck.tempoFactor)) / canvas.clientWidth;
       this.deck.seek(this.deck.time - dx * secPerPx);
     });
     const end = () => {
@@ -149,8 +149,10 @@ export class ZoomView {
       return;
     }
     const t = deck.time;
-    const t0 = t - this.span;
-    const pxPerSec = W / (this.span * 2);
+    // `span` is in real (wall-clock) seconds; scale by tempo so synced decks line up visually
+    const trackSpan = this.span * Math.max(0.05, Math.abs(deck.tempoFactor));
+    const t0 = t - trackSpan;
+    const pxPerSec = W / (trackSpan * 2);
     const wf = deck.waveform;
 
     // loop region
@@ -165,7 +167,7 @@ export class ZoomView {
       const first = Math.ceil((t0 - deck.grid.firstBeat) / beat);
       for (let i = first; ; i++) {
         const bt = timeOfBeat(deck.grid, i);
-        if (bt > t + this.span) break;
+        if (bt > t + trackSpan) break;
         if (bt < 0) continue;
         const x = (bt - t0) * pxPerSec;
         const bar = ((i % 4) + 4) % 4 === 0;
