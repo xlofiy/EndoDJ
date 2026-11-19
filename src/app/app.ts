@@ -83,6 +83,9 @@ export class App {
 
     this.midi.onEvent = (e) => this.handleControl(e);
     await this.midi.init();
+    // analyse new tracks automatically (no-op while a pass is running; it picks them up)
+    this.library.on(() => void this.analyseLibrary());
+    void this.analyseLibrary();
   }
 
   toast(msg: string, error = false): void {
@@ -171,29 +174,51 @@ export class App {
     return true;
   }
 
-  /** Analyse BPM and key for every library track that is missing them (sequentially). */
-  async analyseLibrary(progress: (done: number, total: number) => void): Promise<void> {
-    const todo = [...this.library.tracks.values()].filter(
-      (t) => (t.bpm <= 0 || t.key === undefined) && this.library.isAvailable(t.id),
-    );
+  private analysing = false;
+  /** tracks analysed (or failed) this session, so a track is never retried in a loop */
+  private analysed = new Set<string>();
+  /** analysis progress for the UI: done / total, done === total when finished */
+  onAnalysis: ((done: number, total: number) => void) | null = null;
+
+  /**
+   * Background analysis: BPM, key and length of every track that is missing them, one at a
+   * time. Runs at start-up and whenever tracks are added; picks up tracks added meanwhile.
+   */
+  async analyseLibrary(): Promise<void> {
+    if (this.analysing) return;
+    this.analysing = true;
     let done = 0;
-    for (const t of todo) {
-      try {
-        const buf = await this.decode(t.id);
-        const needBpm = t.bpm <= 0;
-        const res = await this.analyse(buf, !needBpm, t.key !== undefined);
-        const patch: Parameters<Library['update']>[1] = { duration: buf.duration };
-        if (needBpm) {
-          patch.bpm = withNameHint(res.bpm, t.fileName);
-          patch.firstBeat = res.firstBeat;
-          patch.bpmConfidence = res.confidence;
+    try {
+      for (;;) {
+        const t = [...this.library.tracks.values()].find(
+          (r) => (r.bpm <= 0 || r.key === undefined || !r.duration) && !this.analysed.has(r.id) && this.library.isAvailable(r.id),
+        );
+        if (!t) break;
+        this.analysed.add(t.id);
+        const left = [...this.library.tracks.values()].filter(
+          (r) => (r.bpm <= 0 || r.key === undefined || !r.duration) && !this.analysed.has(r.id),
+        ).length;
+        this.onAnalysis?.(done, done + left + 1);
+        try {
+          const buf = await this.decode(t.id);
+          const needBpm = t.bpm <= 0;
+          const res = await this.analyse(buf, !needBpm, t.key !== undefined);
+          const patch: Parameters<Library['update']>[1] = { duration: buf.duration };
+          if (needBpm) {
+            patch.bpm = withNameHint(res.bpm, t.fileName);
+            patch.firstBeat = res.firstBeat;
+            patch.bpmConfidence = res.confidence;
+          }
+          if (t.key === undefined) patch.key = res.key ?? '';
+          await this.library.update(t.id, patch);
+        } catch (e) {
+          console.warn('analysis failed for', t.fileName, e);
         }
-        if (t.key === undefined) patch.key = res.key ?? '';
-        await this.library.update(t.id, patch);
-      } catch (e) {
-        console.warn('analysis failed for', t.fileName, e);
+        done++;
       }
-      progress(++done, todo.length);
+    } finally {
+      this.analysing = false;
+      this.onAnalysis?.(done, done);
     }
   }
 

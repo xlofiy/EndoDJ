@@ -8,9 +8,12 @@ import { camelot, parseKey } from '../audio/key';
 import type { TrackRecord } from '../library/db';
 import { formatDuration, toCSV, toM3U, toText, type ExportTrack } from '../library/export';
 import { AUTOMIX_ID, HISTORY_ID, Library } from '../library/library';
+import { folderTree, inFolder } from '../library/folders';
 import { SAMPLER_SLOTS } from '../app/sampler';
 
 export const LOOPLAB_VIEW = '__looplab__';
+/** view id prefix for a music sub-folder */
+const FOLDER = 'folder:';
 const MY_LOOPS_NAME = 'My Loops';
 const ROW_H = 26;
 const OVERSCAN = 12;
@@ -71,6 +74,11 @@ export class LibraryView {
     private toast: (m: string, e?: boolean) => void,
   ) {}
 
+  /** "All tracks" and folders are sortable lists; playlists keep their order */
+  private get sortable(): boolean {
+    return this.view === 'all' || this.view.startsWith(FOLDER);
+  }
+
   get rowIds(): string[] {
     return this.rows.map((r) => r.id);
   }
@@ -110,12 +118,8 @@ export class LibraryView {
       }
       fileInput.value = '';
     };
-    el('#analyze-btn').onclick = async () => {
-      const status = el('#lib-status');
-      await this.app.analyseLibrary((d, t) => (status.textContent = `Analysing ${d}/${t}…`));
-      status.textContent = '';
-      this.toast('BPM analysis finished.');
-    };
+    const status = el('#lib-status');
+    this.app.onAnalysis = (d, t) => (status.textContent = d < t ? `Analysing BPM & key ${d + 1}/${t}…` : '');
 
     // drag & drop files into the library
     const wrap = this.wrap;
@@ -154,7 +158,7 @@ export class LibraryView {
     });
     el('#lib-table thead').addEventListener('click', (e) => {
       const th = (e.target as HTMLElement).closest<HTMLElement>('th[data-sort]');
-      if (!th || this.view !== 'all') return;
+      if (!th || !this.sortable) return;
       const k = th.dataset.sort as keyof TrackRecord;
       if (this.sortKey === k) this.sortDir = -this.sortDir;
       else {
@@ -195,7 +199,7 @@ export class LibraryView {
     const lib = this.app.library;
     el('#lib-empty').textContent = this.rows.length
       ? ''
-      : this.view === 'all'
+      : this.sortable
         ? lib.tracks.size
           ? 'No tracks match your search.'
           : 'Your library is empty. Click "Add folder" or "Add files", or drop audio files here. Want loops? Open Loop Lab on the left.'
@@ -207,13 +211,20 @@ export class LibraryView {
   private renderSidebar(): void {
     const lib = this.app.library;
     const side = el('#lib-sidebar');
-    const item = (id: string, name: string, count: number | string, droppable: boolean) =>
-      `<div class="item ${this.view === id ? 'active' : ''}" data-view="${esc(id)}" ${droppable ? 'data-drop="1"' : ''}>
+    const item = (id: string, name: string, count: number | string, droppable: boolean, depth = 0) =>
+      `<div class="item ${this.view === id ? 'active' : ''}" data-view="${esc(id)}" ${droppable ? 'data-drop="1"' : ''}${depth ? ` style="padding-left:${10 + depth * 12}px"` : ''}>
         <span>${esc(name)}</span><span class="count">${count}</span></div>`;
+    // top two levels always; deeper folders open below the selected folder
+    const open = this.view.startsWith(FOLDER) ? this.view.slice(FOLDER.length) : '';
+    const folders = folderTree([...lib.tracks.values()].map((t) => t.path)).filter(
+      (f) => f.depth < 2 || open === f.path.slice(0, f.path.lastIndexOf('/')) || inFolder(open, f.path.slice(0, f.path.lastIndexOf('/'))),
+    );
     side.innerHTML =
       item('all', 'All tracks', lib.tracks.size, false) +
       item(LOOPLAB_VIEW, 'Loop Lab', LOOPS.length, false) +
       item(HISTORY_ID, 'History', lib.sessionHistory().length, false) +
+      (folders.length ? '<div class="label group">Folders</div>' : '') +
+      folders.map((f) => item(FOLDER + f.path, f.name, f.count, false, f.depth)).join('') +
       '<div class="label group">Playlists</div>' +
       lib.playlists.map((p) => item(p.id, p.name, p.trackIds.length, true)).join('') +
       '<div class="item muted" id="new-playlist"><span>+ New playlist</span></div>';
@@ -267,7 +278,7 @@ export class LibraryView {
       return;
     }
     exp.innerHTML =
-      this.view !== 'all'
+      !this.sortable
         ? `Export: <button data-exp="txt">TXT</button><button data-exp="m3u">M3U</button><button data-exp="csv">CSV</button>
          ${playlist && playlist.id !== AUTOMIX_ID ? '<button id="del-playlist">Delete playlist</button>' : ''}`
         : `<select id="add-to"><option value="">Add selected to…</option>${lib.playlists.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select>`;
@@ -298,6 +309,9 @@ export class LibraryView {
     let list: Row[];
     if (this.view === 'all') {
       list = [...lib.tracks.values()].map((rec, index) => ({ id: rec.id, rec, index }));
+    } else if (this.view.startsWith(FOLDER)) {
+      const f = this.view.slice(FOLDER.length);
+      list = [...lib.tracks.values()].filter((rec) => inFolder(rec.path, f)).map((rec, index) => ({ id: rec.id, rec, index }));
     } else if (this.view === HISTORY_ID) {
       list = lib
         .sessionHistory()
@@ -318,7 +332,7 @@ export class LibraryView {
           (x.rec.bpm > 0 && x.rec.bpm.toFixed(0).startsWith(q)),
       );
     }
-    if (this.view === 'all') {
+    if (this.sortable) {
       const k = this.sortKey;
       const dir = this.sortDir;
       // keys sort around the Camelot wheel (1A, 1B, 2A …), unknown keys last
@@ -341,7 +355,7 @@ export class LibraryView {
 
   private renderHead(): void {
     const sortable = (k: keyof TrackRecord, label: string, w: string) =>
-      `<th data-sort="${k}" style="width:${w}">${label}${this.view === 'all' && this.sortKey === k ? (this.sortDir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
+      `<th data-sort="${k}" style="width:${w}">${label}${this.sortable && this.sortKey === k ? (this.sortDir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
     el('#lib-table thead').innerHTML = `<tr><th style="width:64px">${this.view === HISTORY_ID ? 'Played' : '#'}</th>${sortable('title', 'Title', '38%')}${sortable('artist', 'Artist', '24%')}${sortable('bpm', 'BPM', '64px')}${sortable('key', 'Key', '72px')}${sortable('duration', 'Time', '60px')}${sortable('playCount', 'Plays', '54px')}<th style="width:${this.app.library.playlist(this.view) ? 190 : 140}px"></th></tr>`;
   }
 

@@ -268,9 +268,9 @@ export const GUIDES: Guide[] = [
     body: `<ol>
       <li>Connect the DDJ-FLX2 with USB, then click <b>Start EndoDJ</b>. Allow MIDI access if the browser asks.</li>
       <li>The controller chip in the top bar shows a green dot when EndoDJ hears the controller.</li>
-      <li>Click <b>Add folder</b> below the decks and pick your music folder. Nothing is copied; EndoDJ remembers where the files are.</li>
+      <li>Click <b>Add folder</b> below the decks and pick your music folder. Nothing is copied; EndoDJ remembers where the files are. Its sub-folders (genres) appear under <b>Folders</b> on the left.</li>
       <li>Load a track onto deck A with its <b>A</b> button (or drag it onto the deck), then press <b>▶</b>.</li>
-      <li>EndoDJ detects BPM and key while the track loads. <b>Analyse</b> does it for the whole library in advance.</li>
+      <li>EndoDJ detects BPM, key and length of every track in the background as soon as you add it (progress shows next to the search box).</li>
     </ol>`,
   },
   {
