@@ -23,7 +23,8 @@ export type DeckCommand =
   | { type: 'bend'; value: number }
   | { type: 'scratch'; active: boolean; rate: number }
   | { type: 'loop'; start: number; end: number }
-  | { type: 'loopOff' };
+  | { type: 'loopOff' }
+  | { type: 'key'; shift: number; keyLock: boolean };
 
 export interface DeckStatus {
   type: 'status';
@@ -81,6 +82,10 @@ class DeckProcessor extends AudioWorkletProcessor {
         break;
       case 'loopOff':
         c.loop = null;
+        break;
+      case 'key':
+        c.keyShift = m.shift;
+        c.keyLock = m.keyLock;
         break;
     }
     this.report();

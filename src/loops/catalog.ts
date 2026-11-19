@@ -20,6 +20,8 @@ export interface LoopDef {
   seconds?: number;
   /** has a steady kick/snare pulse that BPM detection can lock onto */
   steadyBeat: boolean;
+  /** musical key ("Am", "F#"…); omitted for unpitched drums and FX */
+  key?: string;
   render(c: Canvas, bpm: number): void;
 }
 
@@ -35,11 +37,14 @@ function pattern(p: string, stepSec: number, bars: number, fn: (t: number, accen
 
 const s16 = (bpm: number) => 60 / bpm / 4;
 
-/** Chords → note list (root + intervals) on given 16th-step positions per bar. */
-function chordStabs(roots: number[], intervals: number[], steps: number[], bpm: number, len16 = 1.5): SynthNote[] {
+const MINOR = [0, 12, 15, 19];
+const MAJOR = [0, 12, 16, 19];
+
+/** Chords (root + intervals, one chord per bar) → notes on the given 16th-step positions. */
+function chordStabs(chords: [number, number[]][], steps: number[], bpm: number, len16 = 1.5): SynthNote[] {
   const st = s16(bpm);
   const out: SynthNote[] = [];
-  roots.forEach((root, bar) => {
+  chords.forEach(([root, intervals], bar) => {
     for (const s of steps) for (const iv of intervals) out.push({ t: (bar * 16 + s) * st, dur: st * len16, note: root + iv });
   });
   return out;
@@ -65,6 +70,7 @@ export const LOOPS: LoopDef[] = [
   },
   {
     id: 'edm-supersaw-drop',
+    key: 'Am',
     name: 'Supersaw Drop Chords',
     genre: 'EDM',
     kind: 'synth',
@@ -72,7 +78,8 @@ export const LOOPS: LoopDef[] = [
     bars: 4,
     steadyBeat: true,
     render(c, bpm) {
-      const notes = chordStabs([57, 53, 60, 55], [0, 12, 15, 19], [2, 6, 10, 14], bpm, 1.6);
+      // Am – F – C – G
+      const notes = chordStabs([[57, MINOR], [53, MAJOR], [48, MAJOR], [55, MAJOR]], [2, 6, 10, 14], bpm, 1.6);
       synth(c, notes, { wave: 'supersaw', cutoff: 2500, envMod: 4000, envDecay: 0.12, res: 0.9, detune: 22, gain: 0.55, width: 0.8, release: 0.06 });
       const st = s16(bpm);
       pattern('x...x...x...x...', st, 4, (t) => kick(c, t, { f0: 170, f1: 52, decay: 0.2, drive: 2, gain: 0.8 }));
@@ -80,6 +87,7 @@ export const LOOPS: LoopDef[] = [
   },
   {
     id: 'edm-pump-bass',
+    key: 'Am',
     name: 'Sidechain Pump Bass',
     genre: 'EDM',
     kind: 'bass',
@@ -101,6 +109,7 @@ export const LOOPS: LoopDef[] = [
   // ---------------------------------------------------------------- Rave
   {
     id: 'rave-hoover-rush',
+    key: 'Dm',
     name: 'Hoover Rush',
     genre: 'Rave',
     kind: 'synth',
@@ -142,6 +151,7 @@ export const LOOPS: LoopDef[] = [
   },
   {
     id: 'rave-organ-stabs',
+    key: 'Dm',
     name: 'Rave Organ Stabs',
     genre: 'Rave',
     kind: 'synth',
@@ -149,7 +159,8 @@ export const LOOPS: LoopDef[] = [
     bars: 4,
     steadyBeat: true,
     render(c, bpm) {
-      const notes = chordStabs([62, 62, 60, 65], [0, 3, 7, 12], [0, 3, 6, 10, 12], bpm, 1.2);
+      // Dm – Dm – C – F
+      const notes = chordStabs([[62, [0, 3, 7, 12]], [62, [0, 3, 7, 12]], [60, [0, 4, 7, 12]], [65, [0, 4, 7, 12]]], [0, 3, 6, 10, 12], bpm, 1.2);
       synth(c, notes, { wave: 'square', cutoff: 3000, envMod: 2500, envDecay: 0.08, res: 0.8, gain: 0.32, width: 0.4, release: 0.04 });
       const st = s16(bpm);
       pattern('x...x...x...x...', st, 4, (t) => kick(c, t, { f0: 150, f1: 50, decay: 0.18, drive: 1.6, gain: 0.85 }));
@@ -179,6 +190,7 @@ export const LOOPS: LoopDef[] = [
   },
   {
     id: 'techno-acid-line',
+    key: 'Cm',
     name: 'Acid Line 303',
     genre: 'Techno',
     kind: 'bass',
@@ -187,7 +199,8 @@ export const LOOPS: LoopDef[] = [
     steadyBeat: false,
     render(c, bpm) {
       const st = s16(bpm);
-      const seq = [36, 36, 48, 36, 39, 36, 46, 36, 36, 43, 36, 48, 36, 41, 39, 36];
+      // C minor: the Eb (39/51) carries the minor colour
+      const seq = [36, 36, 48, 39, 36, 43, 46, 36, 39, 36, 48, 51, 36, 43, 39, 36];
       const accents = [1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0];
       const slides = [0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0];
       const notes: SynthNote[] = [];
@@ -196,7 +209,7 @@ export const LOOPS: LoopDef[] = [
         const prev = seq[(k + 15) % 16];
         notes.push({ t: i * st, dur: st * (slides[k] ? 1.05 : 0.6), note: seq[k], accent: !!accents[k], slide: slides[(k + 15) % 16] ? prev : undefined });
       }
-      synth(c, notes, { wave: 'saw', cutoff: 380, envMod: 2600, envDecay: 0.1, res: 7, gain: 0.55, drive: 2.2, glide: 0.03, release: 0.01 });
+      synth(c, notes, { wave: 'saw', cutoff: 380, envMod: 2600, envDecay: 0.1, res: 7, gain: 0.55, drive: 1.6, glide: 0.03, release: 0.01 });
     },
   },
   {
@@ -218,6 +231,7 @@ export const LOOPS: LoopDef[] = [
   // ---------------------------------------------------------------- Scene / electro
   {
     id: 'scene-electro-fidget',
+    key: 'Em',
     name: 'Electro Fidget Bass',
     genre: 'Scene',
     kind: 'bass',
@@ -330,6 +344,7 @@ export const LOOPS: LoopDef[] = [
   },
   {
     id: 'breakcore-reese',
+    key: 'Gm',
     name: 'Reese Pressure',
     genre: 'Breakcore',
     kind: 'bass',
@@ -338,11 +353,12 @@ export const LOOPS: LoopDef[] = [
     steadyBeat: false,
     render(c, bpm) {
       const beat = 60 / bpm;
+      // G minor: G – Bb – Eb – D
       const notes: SynthNote[] = [
-        { t: 0, dur: beat * 6, note: 31 },
-        { t: beat * 6.5, dur: beat * 1.3, note: 34 },
-        { t: beat * 8, dur: beat * 6, note: 29 },
-        { t: beat * 14.5, dur: beat * 1.3, note: 26 },
+        { t: 0, dur: beat * 3.6, note: 31 },
+        { t: beat * 4, dur: beat * 3.6, note: 34 },
+        { t: beat * 8, dur: beat * 5.6, note: 27 },
+        { t: beat * 14, dur: beat * 1.8, note: 26 },
       ];
       synth(c, notes, { wave: 'supersaw', voices: 2, detune: 28, cutoff: 600, envMod: 300, envDecay: 1, res: 1.2, gain: 0.8, drive: 2, width: 0.7, attack: 0.02, release: 0.1 });
     },
@@ -351,6 +367,7 @@ export const LOOPS: LoopDef[] = [
   // ---------------------------------------------------------------- Hyperpop
   {
     id: 'hyperpop-glitter-808',
+    key: 'Db',
     name: 'Glitter 808',
     genre: 'Hyperpop',
     kind: 'bass',
@@ -375,6 +392,7 @@ export const LOOPS: LoopDef[] = [
   },
   {
     id: 'hyperpop-bubblegum-arp',
+    key: 'Db',
     name: 'Bubblegum Arp',
     genre: 'Hyperpop',
     kind: 'synth',

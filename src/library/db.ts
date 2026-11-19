@@ -11,6 +11,8 @@ export interface TrackRecord {
   bpm: number;
   firstBeat: number;
   bpmConfidence: number;
+  /** detected key, e.g. "Am" ("" = analysed, no clear key; undefined = not analysed yet) */
+  key?: string;
   cuePoint: number;
   hotcues: (number | null)[];
   addedAt: number;

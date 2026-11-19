@@ -1,3 +1,5 @@
+import { PitchShifter, pitchRatio } from './pitch-shift';
+
 /**
  * Sample-accurate deck playback core. Runs inside the AudioWorklet (deck-processor.ts),
  * kept free of worklet globals so it can be unit-tested.
@@ -26,6 +28,11 @@ export class PlayerCore {
   scratching = false;
   scratchRate = 0;
   loop: LoopRegion | null = null;
+  /** key shift in semitones (independent of tempo) */
+  keyShift = 0;
+  /** key lock / master tempo: tempo changes do not change the pitch */
+  keyLock = false;
+  private shifter: PitchShifter | null = null;
 
   /** the rate actually applied this frame (smoothed). */
   private currentRate = 0;
@@ -36,6 +43,8 @@ export class PlayerCore {
     this.channels = channels;
     this.length = channels.length ? channels[0].length : 0;
     this.srcRatio = srcSampleRate / outSampleRate;
+    if (!this.shifter) this.shifter = new PitchShifter(outSampleRate);
+    this.shifter.reset();
     this.position = 0;
     this.playing = false;
     this.loop = null;
@@ -119,6 +128,11 @@ export class PlayerCore {
         }
       }
       this.position = next;
+    }
+    if (this.shifter && hasAudio) {
+      // scratching always sounds like vinyl: no key processing while the platter is held
+      const ratio = this.scratching ? 1 : pitchRatio(this.keyShift, this.tempo + this.bend, this.keyLock);
+      this.shifter.process(outL, outR, frames, ratio);
     }
   }
 

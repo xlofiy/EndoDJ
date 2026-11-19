@@ -5,6 +5,7 @@
 import type { DeckCommand, DeckStatus } from './deck-processor';
 import type { WaveformData } from './waveform';
 import { beatAt, clamp, phaseCorrection, quantize, syncTempo, timeOfBeat, type Grid } from './mixmath';
+import { keySyncShift, transpose, type MusicalKey } from './key';
 
 export const HOTCUE_COUNT = 8;
 export const TEMPO_RANGES = [0.06, 0.1, 0.16, 0.5] as const;
@@ -41,6 +42,12 @@ export class Deck {
   synced = false;
   quantize = true;
   reverse = false;
+  /** detected key of the loaded track (null = unknown / unpitched) */
+  key: MusicalKey | null = null;
+  /** key shift in semitones, independent of tempo */
+  keyShift = 0;
+  /** master tempo: tempo changes keep the pitch */
+  keyLock = false;
 
   cuePoint = 0;
   hotcues: (number | null)[] = new Array(HOTCUE_COUNT).fill(null);
@@ -124,6 +131,9 @@ export class Deck {
     this.cuePoint = saved?.cuePoint ?? 0;
     this.hotcues = Array.from({ length: HOTCUE_COUNT }, (_, i) => saved?.hotcues?.[i] ?? null);
     this.synced = false;
+    this.key = null;
+    this.keyShift = 0;
+    this.sendKey();
     const channels: Float32Array[] = [];
     for (let c = 0; c < Math.min(2, buffer.numberOfChannels); c++) channels.push(buffer.getChannelData(c).slice());
     this.send({ type: 'load', channels, sampleRate: buffer.sampleRate }, channels.map((c) => c.buffer));
@@ -205,6 +215,51 @@ export class Deck {
   setReverse(on: boolean): void {
     this.reverse = on;
     this.setTempoFader(this.tempoFader);
+  }
+
+  // ------------------------------------------------------------------ key
+
+  private sendKey(): void {
+    this.send({ type: 'key', shift: this.keyShift, keyLock: this.keyLock });
+  }
+
+  setKey(key: MusicalKey | null): void {
+    this.key = key;
+    this.emit();
+  }
+
+  /** @param semitones absolute key shift, clamped to ±12 */
+  setKeyShift(semitones: number): void {
+    this.keyShift = clamp(Math.round(semitones), -12, 12);
+    this.sendKey();
+    this.emit();
+  }
+
+  setKeyLock(on: boolean): void {
+    this.keyLock = on;
+    this.sendKey();
+    this.emit();
+  }
+
+  /** Semitones the pitch currently differs from the original (key shift + tempo without key lock). */
+  get pitchOffset(): number {
+    const tempoSemis = this.keyLock ? 0 : 12 * Math.log2(Math.max(0.01, Math.abs(this.tempoFactor)));
+    return this.keyShift + tempoSemis;
+  }
+
+  /** The key you hear right now. */
+  get effectiveKey(): MusicalKey | null {
+    return this.key ? transpose(this.key, this.pitchOffset) : null;
+  }
+
+  /** Shift this deck's key so it mixes harmonically with `other` (same Camelot number). */
+  keySyncTo(other: Deck): boolean {
+    const target = other.effectiveKey;
+    if (!this.key || !target) return false;
+    // turn key lock on so later tempo changes cannot pull the deck out of key
+    this.keyLock = true;
+    this.setKeyShift(keySyncShift(this.key, target));
+    return true;
   }
 
   // ------------------------------------------------------------------ transport

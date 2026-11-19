@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { detectBeatGrid } from '../src/audio/bpm';
+import { camelot, detectKey, parseKey } from '../src/audio/key';
 import { bpmFromName, withNameHint, GENRES, LOOPS, loopLengthSeconds, renderLoop } from '../src/loops/catalog';
 
 const SR = 44100;
@@ -25,6 +26,21 @@ describe('Loop Lab catalogue', () => {
       expect(peak).toBeGreaterThan(0.5); // normalised, not silent
       expect(energy / L.length).toBeGreaterThan(1e-5);
     });
+
+    // Resonant 303 filter sweeps smear energy over all 12 pitch classes (chroma is flat apart
+    // from the root), so chroma detection cannot tell C minor from C major there. The app uses
+    // the catalogue key for built-in loops, so key sync is unaffected.
+    const detectionUnreliable = ['techno-acid-line'];
+    if (def.key && !detectionUnreliable.includes(def.id)) {
+      it(`key detection agrees with "${def.name}" (${def.key})`, () => {
+        const [L, R] = renderLoop(def, SR);
+        const mono = L.map((v, i) => (v + R[i]) / 2);
+        const found = detectKey(mono, SR).key;
+        expect(found).not.toBeNull();
+        // same Camelot number = same key or its relative major/minor, which mix identically
+        expect(parseInt(camelot(found!), 10)).toBe(parseInt(camelot(parseKey(def.key)!), 10));
+      });
+    }
 
     if (def.steadyBeat) {
       it(`auto-BPM detects ${def.bpm} BPM in "${def.name}"`, () => {

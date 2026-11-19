@@ -13,6 +13,7 @@ import type { ControlEvent } from '../midi/mapping';
 import { Automix } from './automix';
 import { LoopLab } from '../loops/looplab';
 import { withNameHint } from '../loops/catalog';
+import { parseKey } from '../audio/key';
 import { Sampler } from './sampler';
 
 export const BEATLOOP_PAD_SIZES = [0.25, 0.5, 1, 2, 4, 8, 16, 32];
@@ -77,11 +78,11 @@ export class App {
 
   // ------------------------------------------------------------------ loading & analysis
 
-  analyse(buffer: AudioBuffer, skipBpm: boolean): Promise<AnalysisResponse> {
+  analyse(buffer: AudioBuffer, skipBpm: boolean, skipKey: boolean): Promise<AnalysisResponse> {
     const id = this.nextJob++;
     const channels: Float32Array[] = [];
     for (let c = 0; c < Math.min(2, buffer.numberOfChannels); c++) channels.push(buffer.getChannelData(c).slice());
-    const req: AnalysisRequest = { id, channels, sampleRate: buffer.sampleRate, skipBpm };
+    const req: AnalysisRequest = { id, channels, sampleRate: buffer.sampleRate, skipBpm, skipKey };
     return new Promise((resolve) => {
       this.jobs.set(id, resolve);
       this.worker.postMessage(req, channels.map((c) => c.buffer));
@@ -121,10 +122,16 @@ export class App {
     });
     this.loggedPlay[deckIndex] = null;
     if (rec.bpm > 0) deck.setAnalysis({ bpm: rec.bpm, firstBeat: rec.firstBeat }, null);
-    const res = await this.analyse(buffer, rec.bpm > 0);
+    const keyKnown = rec.key !== undefined;
+    if (keyKnown) deck.setKey(parseKey(rec.key));
+    const res = await this.analyse(buffer, rec.bpm > 0, keyKnown);
     if (seq !== this.loadSeq[deckIndex]) return true;
     deck.setAnalysis(rec.bpm > 0 ? null : { bpm: res.bpm, firstBeat: res.firstBeat }, res.waveform);
     const patch: Parameters<Library['update']>[1] = { duration: buffer.duration };
+    if (!keyKnown) {
+      patch.key = res.key ?? '';
+      deck.setKey(parseKey(res.key));
+    }
     if (rec.bpm <= 0 && res.bpm > 0) {
       res.bpm = withNameHint(res.bpm, rec.fileName);
       deck.setAnalysis({ bpm: res.bpm, firstBeat: res.firstBeat }, null);
@@ -137,20 +144,25 @@ export class App {
     return true;
   }
 
-  /** Analyse BPM for every library track that has none yet (sequentially). */
+  /** Analyse BPM and key for every library track that is missing them (sequentially). */
   async analyseLibrary(progress: (done: number, total: number) => void): Promise<void> {
-    const todo = [...this.library.tracks.values()].filter((t) => t.bpm <= 0 && this.library.isAvailable(t.id));
+    const todo = [...this.library.tracks.values()].filter(
+      (t) => (t.bpm <= 0 || t.key === undefined) && this.library.isAvailable(t.id),
+    );
     let done = 0;
     for (const t of todo) {
       try {
         const buf = await this.decode(t.id);
-        const res = await this.analyse(buf, false);
-        await this.library.update(t.id, {
-          duration: buf.duration,
-          bpm: withNameHint(res.bpm, t.fileName),
-          firstBeat: res.firstBeat,
-          bpmConfidence: res.confidence,
-        });
+        const needBpm = t.bpm <= 0;
+        const res = await this.analyse(buf, !needBpm, t.key !== undefined);
+        const patch: Parameters<Library['update']>[1] = { duration: buf.duration };
+        if (needBpm) {
+          patch.bpm = withNameHint(res.bpm, t.fileName);
+          patch.firstBeat = res.firstBeat;
+          patch.bpmConfidence = res.confidence;
+        }
+        if (t.key === undefined) patch.key = res.key ?? '';
+        await this.library.update(t.id, patch);
       } catch (e) {
         console.warn('analysis failed for', t.fileName, e);
       }
@@ -175,13 +187,17 @@ export class App {
     if (seq !== this.loadSeq[deckIndex] || deck.playing) return false;
     deck.load({ id: `loop:${loopId}`, title: def.name, artist: `${def.genre} · Loop Lab` }, buffer);
     this.loggedPlay[deckIndex] = null;
+    deck.setKey(parseKey(def.key));
+    const other = this.engine.otherDeck(deck);
     if (def.bpm > 0) {
       deck.setAnalysis({ bpm: def.bpm, firstBeat: 0 }, null);
       deck.beatloop(def.bars * 4);
-      const other = this.engine.otherDeck(deck);
+      // auto-adjust: match the playing deck's BPM and phase…
       if (other.playing && other.grid) deck.syncTo(other);
     }
-    const res = await this.analyse(buffer, true);
+    // …and its key (key lock on, so tempo and key stay independent)
+    if (other.playing && deck.key && other.effectiveKey) deck.keySyncTo(other);
+    const res = await this.analyse(buffer, true, true);
     if (seq === this.loadSeq[deckIndex]) deck.setAnalysis(null, res.waveform);
     this.engine.fx.updateParams();
     return true;
@@ -342,6 +358,21 @@ export class App {
             break;
           case 'beatjumpFwd':
             if (press) deck.beatjump(4);
+            break;
+          case 'keyUp':
+            if (press) deck.setKeyShift(deck.keyShift + 1);
+            break;
+          case 'keyDown':
+            if (press) deck.setKeyShift(deck.keyShift - 1);
+            break;
+          case 'keyReset':
+            if (press) deck.setKeyShift(0);
+            break;
+          case 'keySync':
+            if (press && !deck.keySyncTo(eng.otherDeck(deck))) this.toast('Key sync needs a detected key on both decks.', true);
+            break;
+          case 'keyLock':
+            if (press) deck.setKeyLock(!deck.keyLock);
             break;
           case 'shift':
             break;

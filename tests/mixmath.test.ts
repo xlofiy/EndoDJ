@@ -124,3 +124,42 @@ describe('PlayerCore', () => {
     expect(p.position).toBeLessThan(800);
   });
 });
+
+describe('PlayerCore key shift', () => {
+  const SR = 48000;
+  const tone = new Float32Array(SR * 2).map((_, i) => 0.5 * Math.sin((2 * Math.PI * 300 * i) / SR));
+  const freqOf = (p: PlayerCore) => {
+    const out = new Float32Array(SR);
+    for (let i = 0; i < SR; i += 128) p.process(out.subarray(i, i + 128), null, 128);
+    let first = -1;
+    let last = -1;
+    let n = 0;
+    for (let i = SR / 2 + 1; i < SR; i++)
+      if (out[i - 1] < 0 && out[i] >= 0) {
+        if (first < 0) first = i;
+        last = i;
+        n++;
+      }
+    return ((n - 1) * SR) / (last - first);
+  };
+
+  it('raises the key without changing speed', () => {
+    const p = new PlayerCore();
+    p.load([tone], SR, SR);
+    p.playing = true;
+    p.keyShift = 12;
+    expect(freqOf(p) / 600).toBeCloseTo(1, 1);
+    expect(p.position).toBeGreaterThan(SR * 0.95); // still one second of audio per second
+    expect(p.position).toBeLessThan(SR * 1.01);
+  });
+
+  it('key lock keeps the pitch when the tempo changes', () => {
+    const p = new PlayerCore();
+    p.load([tone], SR, SR);
+    p.playing = true;
+    p.tempo = 1.25;
+    p.keyLock = true;
+    expect(freqOf(p) / 300).toBeCloseTo(1, 1);
+    expect(p.position).toBeGreaterThan(SR * 1.2); // but it plays 25 % faster
+  });
+});
