@@ -1397,3 +1397,28 @@ body.lowfx .sun::after {
 .keyrow button {
   padding: 0 8px;
 }
+#lib-subbar .break {
+  flex-basis: 100%;
+  height: 0;
+}
+#lib-subbar .tabs {
+  display: inline-flex;
+  gap: 2px;
+}
+#lib-subbar [data-seed] {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#lib-sidebar .item span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#lib-subbar #am-load {
+  max-width: 220px;
+}
+#lib-subbar {
+  row-gap: 4px;
+}

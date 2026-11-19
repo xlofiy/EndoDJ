@@ -90,6 +90,12 @@ FX → history → automix crossfade), with no console errors:
   deck. Linkwitz-Riley crossovers + mid/side; flat with all parts on (measured in the browser). Not AI
   stem separation — see ROADMAP.
 - **Loops**: 20 more synthesised loops (two per genre plus Hardstyle and Jersey Club, four each).
+- **Automix v2** (`src/app/automix.ts`): `startQueue()` puts track 1 on A and track 2 on B (odd tracks A,
+  even B); `loop:` queue entries are *layers* — no deck, played over the next transition via an
+  AudioBufferSourceNode synced to the outgoing deck's tempo and next bar. Suggestions is a tab of the
+  Automix view, seeded from deck A/B (excludes decks, queue and history). Auto-sets are saved as
+  playlists; Save set / Load set in the Automix bar.
+- **Eurobeat**: 3 CC0 loops (MintoDog, OpenGameArt) + 2 synthesised.
 - **Fixes**: BPM low-band ripple (40-60 Hz kicks could pull the tempo to 3/4); a track loaded while
   background analysis ran lost its beat grid; Web Audio low/high-pass Q is in dB.
 

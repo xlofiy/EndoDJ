@@ -43,6 +43,9 @@ Keys are labelled only where detection was confident (margin ≥ 0.05).
 | `cc0-techno-oioioi.ogg` | [OIOIOIOIOIOI](https://opengameart.org/content/oioioioioioi) — cinameng | 8 bars from 270.599 s | 110 | Bm |
 | `cc0-techno-tense-drums.ogg` | [Tense Bass Boost Drum Loop 140 BPM](https://opengameart.org/content/tense-bass-boost-drum-loop-140-bpm) — Fupi | 2 bars from 0.171 s | 140 | D |
 | `cc0-edm-technomania.ogg` | [Technomania101 - 2000's europop electronic dance music](https://opengameart.org/content/technomania101-2000s-europop-electronic-dance-music) (no-tempo-change version) — Fupi | 8 bars from 115.143 s | 142 | Bm |
+| `cc0-eurobeat-fever-stadium.ogg` | [Fever Stadium](https://opengameart.org/content/fever-stadium) (bpm165 version) — MintoDog | 8 bars from 64.001 s | 165 | — (unclear) |
+| `cc0-eurobeat-fever-climax.ogg` | [Fever Stadium](https://opengameart.org/content/fever-stadium) (climax, bpm180 version) — MintoDog | 8 bars from 64.004 s | 180 | — (unclear) |
+| `cc0-eurobeat-super-santa.ogg` | [Super Santa Claus](https://opengameart.org/content/super-santa-claus) — MintoDog | 8 bars from 84.854 s | 170 | Am |
 | `cc0-edm-simple-drumbeat.ogg` | [simple drumbeat](https://opengameart.org/content/simple-drumbeat) (body) — Turnovus | 8 bars from 20.578 s | 140 | — |
 | `cc0-rave-wuffly.ogg` | [Things Got a Bit Ravey in Wuffly Land Tonight](https://opengameart.org/content/things-got-a-bit-ravey-in-wuffly-land-tonight) — Spring Spring | 8 bars from 268.865 s | 125 | — (unclear) |
 

@@ -15,16 +15,15 @@ import { SAMPLER_SLOTS } from '../app/sampler';
 export const LOOPLAB_VIEW = '__looplab__';
 /** view id prefix for a music sub-folder */
 const FOLDER = 'folder:';
-const SUGGEST_VIEW = '__suggest__';
 
 const mixTrack = (r: TrackRecord): MixTrack => ({ id: r.id, bpm: r.bpm, key: r.key, path: r.path });
 
-/** A Loop Lab bridge in the Automix queue, shown like a track. */
+/** A Loop Lab layer in the Automix queue (plays over the transition into the next track), shown like a track. */
 function loopRecord(id: string): TrackRecord | undefined {
   const def = id.startsWith(LOOP_PREFIX) ? findLoop(id.slice(LOOP_PREFIX.length)) : undefined;
   if (!def) return undefined;
   const length = loopLengthSeconds(def);
-  return { id, fileName: def.name, title: def.name, artist: `${def.genre} · Loop Lab bridge`, bpm: def.bpm, key: def.key, duration: length, playCount: 0, path: '' } as TrackRecord;
+  return { id, fileName: def.name, title: def.name, artist: `${def.genre} · Loop Lab layer over the next mix`, bpm: def.bpm, key: def.key, duration: length, playCount: 0, path: '' } as TrackRecord;
 }
 const MY_LOOPS_NAME = 'My Loops';
 const ROW_H = 26;
@@ -34,6 +33,7 @@ const GENRE_COLORS: Record<Genre, string> = {
   EDM: '#0d8fd6',
   Rave: '#d98a00',
   Techno: '#4c5fc7',
+  Eurobeat: '#e0368c',
   Hardstyle: '#c62f3a',
   'Jersey Club': '#1d9e6a',
   Scene: '#d13b8f',
@@ -79,7 +79,10 @@ export class LibraryView {
   private renderedRange = '';
   private scheduled = false;
   private genre: Genre | 'All' = 'All';
-  /** Suggestions view: the track to match, and why each row matches it */
+  /** Automix view tab */
+  private amTab: 'queue' | 'suggest' = 'queue';
+  /** Suggestions: deck the user picked to match (null = automatic), the track matched, and why each row matches */
+  private seedDeck: number | null = null;
   private seedId: string | null = null;
   private matches = new Map<string, Match>();
 
@@ -90,6 +93,11 @@ export class LibraryView {
     private app: App,
     private toast: (m: string, e?: boolean) => void,
   ) {}
+
+  /** Suggestions tab of the Automix view */
+  private get suggesting(): boolean {
+    return this.view === AUTOMIX_ID && this.amTab === 'suggest';
+  }
 
   /** "All tracks" and folders are sortable lists; playlists keep their order */
   private get sortable(): boolean {
@@ -106,7 +114,7 @@ export class LibraryView {
     this.app.automix.onChange = () => this.schedule();
     for (const d of this.app.engine.decks) {
       d.on(() => {
-        if (this.view === SUGGEST_VIEW && this.playingSeed() && this.playingSeed() !== this.seedId) this.schedule();
+        if (this.suggesting && this.seed()?.id !== this.seedId) this.schedule();
       });
     }
     this.app.looplab.onChange = () => {
@@ -227,7 +235,7 @@ export class LibraryView {
         ? lib.tracks.size
           ? 'No tracks match your search.'
           : 'Your library is empty. Click "Add folder" or "Add files", or drop audio files here. Want loops? Open Loop Lab on the left.'
-        : this.view === SUGGEST_VIEW
+        : this.suggesting
           ? ''
           : 'Nothing here yet. Drag tracks from "All tracks" onto a playlist in the sidebar.';
   }
@@ -249,7 +257,6 @@ export class LibraryView {
       item('all', 'All tracks', lib.tracks.size, false) +
       item(LOOPLAB_VIEW, 'Loop Lab', LOOPS.length, false) +
       item(HISTORY_ID, 'History', lib.sessionHistory().length, false) +
-      item(SUGGEST_VIEW, 'Suggestions', '', false) +
       (folders.length ? '<div class="label group">Folders</div>' : '') +
       folders.map((f) => item(FOLDER + f.path, f.name, f.count, false, f.depth)).join('') +
       '<div class="label group">Playlists</div>' +
@@ -260,10 +267,6 @@ export class LibraryView {
     side.querySelectorAll<HTMLElement>('[data-view]').forEach((it) => {
       const id = it.dataset.view!;
       it.onclick = () => {
-        if (id === SUGGEST_VIEW) {
-          const loaded = this.app.engine.decks.map((d) => d.track?.id).find((t) => t && this.app.library.tracks.has(t));
-          this.seedId = this.playingSeed() ?? this.app.selectedTrackId ?? loaded ?? null;
-        }
         this.view = id;
         if (id !== LOOPLAB_VIEW) this.app.looplab.stopPreview();
         this.render();
@@ -302,77 +305,140 @@ export class LibraryView {
     };
   }
 
-  /** library track on the deck that is playing (louder deck first), if any */
-  private playingSeed(): string | null {
+  /**
+   * Track to suggest a follow-up for: the deck the user picked, else the deck that is playing (the
+   * louder one if both), else whatever is loaded on A, then B; else the selected library track.
+   */
+  private seed(): { id: string; deck: number | null } | null {
     const lib = this.app.library;
     const eng = this.app.engine;
-    const decks = eng.decks.filter((d) => d.playing && d.track && lib.tracks.has(d.track.id));
-    decks.sort((a, b) => eng.strips[b.index].values.volume - eng.strips[a.index].values.volume);
-    return decks[0]?.track?.id ?? null;
+    const onDeck = (i: number) => {
+      const id = eng.decks[i].track?.id;
+      return id && lib.tracks.has(id) ? id : null;
+    };
+    if (this.seedDeck !== null && onDeck(this.seedDeck)) return { id: onDeck(this.seedDeck)!, deck: this.seedDeck };
+    const playing = eng.decks.filter((d) => d.playing && onDeck(d.index));
+    playing.sort((a, b) => eng.strips[b.index].values.volume - eng.strips[a.index].values.volume);
+    const deck = playing[0]?.index ?? (onDeck(0) ? 0 : onDeck(1) ? 1 : null);
+    if (deck !== null) return { id: onDeck(deck)!, deck };
+    const sel = this.app.selectedTrackId;
+    return sel && lib.tracks.has(sel) ? { id: sel, deck: null } : null;
   }
 
   /** Second toolbar row: Automix controls + Auto-set (Automix queue), seed + fitting loops (Suggestions). */
   private renderSubbar(): void {
     const bar = el('#lib-subbar');
     const lib = this.app.library;
-    bar.hidden = this.view !== AUTOMIX_ID && this.view !== SUGGEST_VIEW;
-    if (this.view === AUTOMIX_ID) {
-      const am = this.app.automix;
+    bar.hidden = this.view !== AUTOMIX_ID;
+    if (this.view !== AUTOMIX_ID) return;
+    const am = this.app.automix;
+    const queueLen = lib.playlist(AUTOMIX_ID)?.trackIds.length ?? 0;
+    const saved = lib.playlists.filter((p) => p.id !== AUTOMIX_ID);
+    let html = `
+      <span class="tabs"><button data-tab="queue" class="${this.amTab === 'queue' ? 'on' : ''}">Queue (${queueLen})</button><button data-tab="suggest" class="${this.amTab === 'suggest' ? 'on' : ''}" title="Tracks that mix well after what is on deck A / B">Suggestions</button></span>
+      <button id="am-toggle" class="chip ${am.enabled ? 'on' : ''}" title="Mix through this queue automatically: beat-matched crossfades before each track ends; tracks alternate between deck A and B">Automix ${am.enabled ? 'on' : 'off'}</button>
+      <label>Crossfade <input id="am-fade" type="number" min="2" max="60" step="1" value="${am.fadeSeconds}" /> s</label>
+      <span class="sep"></span>
+      <button id="am-save" title="Save the queue (tracks and layers) as a playlist">Save set</button>
+      <select id="am-load" title="Put a saved set or playlist into the queue"><option value="">Load set…</option>${saved.map((p) => `<option value="${esc(p.id)}">${esc(p.name)} (${p.trackIds.length})</option>`).join('')}</select>
+      <span class="break"></span>`;
+    if (this.amTab === 'queue') {
       const folders = folderTree([...lib.tracks.values()].map((t) => t.path)).filter((f) => f.depth < 3);
-      const folderSel = bar.querySelector<HTMLSelectElement>('#as-folder')?.value ?? '';
-      const opt = (f: Folder) => `<option value="${esc(f.path)}" ${f.path === folderSel ? 'selected' : ''}>${'  '.repeat(f.depth)}${esc(f.name)} (${f.count})</option>`;
-      bar.innerHTML = `
-        <button id="am-toggle" class="chip ${am.enabled ? 'on' : ''}" title="Mix through this queue automatically: beat-matched crossfades before each track ends">Automix ${am.enabled ? 'on' : 'off'}</button>
-        <label>Crossfade <input id="am-fade" type="number" min="2" max="60" step="1" value="${am.fadeSeconds}" /> s</label>
-        <span class="sep"></span>
+      const opt = (f: Folder) => `<option value="${esc(f.path)}" ${f.path === this.setFolder ? 'selected' : ''}>${'  '.repeat(f.depth)}${esc(f.name)} (${f.count})</option>`;
+      html += `
         <label title="Builds a set from tracks in this folder: starts slow, then picks the best tempo / key match each time">Auto-set from
           <select id="as-folder"><option value="">All tracks</option>${folders.map(opt).join('')}</select></label>
         <label><input id="as-len" type="number" min="2" max="60" step="1" value="${this.setLength}" /> tracks</label>
-        <label title="Put a drum loop of the folder's genre between tracks whose key or tempo do not match well"><input id="as-loops" type="checkbox" ${this.setLoops ? 'checked' : ''} /> Loop Lab bridges</label>
-        <button id="as-build">Build set &amp; play</button>`;
-      el('#am-toggle').onclick = () => am.setEnabled(!am.enabled);
-      const fade = el<HTMLInputElement>('#am-fade');
-      fade.onchange = () => {
-        am.fadeSeconds = Math.max(2, Math.min(60, parseFloat(fade.value) || 12));
-        fade.value = String(am.fadeSeconds);
+        <label title="Play a drum loop of the folder's genre over transitions whose key or tempo do not match well"><input id="as-loops" type="checkbox" ${this.setLoops ? 'checked' : ''} /> Loop Lab layers</label>
+        <button id="as-build" title="Fills the queue, puts track 1 on deck A and track 2 on deck B, saves the set and starts Automix">Build set &amp; play</button>`;
+    } else {
+      const seed = this.seed();
+      const rec = seed ? lib.tracks.get(seed.id) : undefined;
+      const deckBtn = (i: number) => {
+        const t = this.app.engine.decks[i].track;
+        const ok = t && lib.tracks.has(t.id);
+        return `<button data-seed="${i}" class="${seed?.deck === i ? 'on' : ''}" ${ok ? '' : 'disabled'}>${i ? 'B' : 'A'}: ${ok ? esc(t!.title) : 'empty'}</button>`;
       };
+      const genre = rec ? genreOf(rec.path) : null;
+      const loops = rec ? loopsFor(genre, rec.key).slice(0, 6) : [];
+      html += `<span class="muted">After</span>${deckBtn(0)}${deckBtn(1)}`;
+      if (!rec) html += '<span class="muted">Load a track on deck A or B (or select one) to see what mixes well after it.</span>';
+      else
+        html += `<span class="sep"></span>${
+          loops.length
+            ? `<span class="muted">${genre} layers:</span>${loops
+                .map((l) => `<span class="loop-chip" data-loop="${l.id}" title="Q: play this loop over the next transition">${esc(l.name)}<button data-q>Q</button></span>`)
+                .join('')}`
+            : `<span class="muted">${genre ? `No ${genre} loops fit this key.` : 'Put tracks in genre folders (e.g. Song MP3s/Techno) for loop layers.'}</span>`
+        }`;
+    }
+    bar.innerHTML = html;
+    bar.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((b) => {
+      b.onclick = () => {
+        this.amTab = b.dataset.tab as 'queue' | 'suggest';
+        this.render();
+      };
+    });
+    el('#am-toggle').onclick = () => (am.enabled ? am.setEnabled(false) : void this.startAutomix());
+    const fade = el<HTMLInputElement>('#am-fade');
+    fade.onchange = () => {
+      am.fadeSeconds = Math.max(2, Math.min(60, parseFloat(fade.value) || 12));
+      fade.value = String(am.fadeSeconds);
+    };
+    el('#am-save').onclick = () => void this.saveSet();
+    const load = el<HTMLSelectElement>('#am-load');
+    load.onchange = () => void this.loadSet(load.value);
+    bar.querySelectorAll<HTMLButtonElement>('[data-seed]').forEach((b) => {
+      b.onclick = () => {
+        this.seedDeck = parseInt(b.dataset.seed!, 10);
+        this.render();
+      };
+    });
+    bar.querySelectorAll<HTMLElement>('.loop-chip').forEach((chip) => {
+      chip.querySelector<HTMLButtonElement>('[data-q]')!.onclick = () => {
+        void lib.addToPlaylist(AUTOMIX_ID, [LOOP_PREFIX + chip.dataset.loop!]);
+        this.toast('Layer added to the queue: it plays over the transition into the track after it.');
+      };
+    });
+    if (this.amTab === 'queue') {
+      const folder = el<HTMLSelectElement>('#as-folder');
+      folder.onchange = () => (this.setFolder = folder.value);
       const len = el<HTMLInputElement>('#as-len');
       len.onchange = () => (this.setLength = Math.max(2, Math.min(60, parseInt(len.value, 10) || 8)));
       const loops = el<HTMLInputElement>('#as-loops');
       loops.onchange = () => (this.setLoops = loops.checked);
-      el('#as-build').onclick = () => void this.autoSet(el<HTMLSelectElement>('#as-folder').value);
-    } else if (this.view === SUGGEST_VIEW) {
-      const seed = this.seedId ? lib.tracks.get(this.seedId) : undefined;
-      if (!seed) {
-        bar.innerHTML = '<span class="muted">Play or select a track, then open Suggestions to see what mixes well after it.</span>';
-        return;
-      }
-      const genre = genreOf(seed.path);
-      const loops = loopsFor(genre, seed.key).slice(0, 6);
-      bar.innerHTML = `<span>After <b>${esc(seed.title)}</b> <span class="muted">${seed.bpm > 0 ? seed.bpm.toFixed(0) + ' BPM' : ''} ${keyCell(seed.key)}</span></span>
-        <span class="sep"></span>
-        ${
-          loops.length
-            ? `<span class="muted">${genre} loops that fit:</span>${loops
-                .map(
-                  (l) => `<span class="loop-chip" data-loop="${l.id}">${esc(l.name)}<button data-deck="0" title="Load onto deck A">A</button><button data-deck="1" title="Load onto deck B">B</button><button data-q title="Add to the Automix queue">Q</button></span>`,
-                )
-                .join('')}`
-            : `<span class="muted">${genre ? `No ${genre} loops fit this key.` : 'Put tracks in genre folders (e.g. Song MP3s/Techno) to get loop suggestions.'}</span>`
-        }`;
-      bar.querySelectorAll<HTMLElement>('.loop-chip').forEach((chip) => {
-        const id = chip.dataset.loop!;
-        chip.querySelectorAll<HTMLButtonElement>('[data-deck]').forEach((b) => {
-          b.onclick = () => void this.app.loadLoop(parseInt(b.dataset.deck!, 10), id);
-        });
-        chip.querySelector<HTMLButtonElement>('[data-q]')!.onclick = () => {
-          void lib.addToPlaylist(AUTOMIX_ID, [LOOP_PREFIX + id]);
-          this.toast('Loop added to the Automix queue.');
-        };
-      });
+      el('#as-build').onclick = () => void this.autoSet(this.setFolder);
     }
   }
 
+  /** Automix on: a fresh start puts the first two queued tracks on A and B. */
+  private async startAutomix(): Promise<void> {
+    if (!(await this.app.automix.startQueue())) this.toast('The Automix queue is empty. Add tracks with Q, or build an Auto-set.', true);
+  }
+
+  private async saveSet(): Promise<void> {
+    const lib = this.app.library;
+    const ids = lib.playlist(AUTOMIX_ID)?.trackIds ?? [];
+    if (!ids.length) return this.toast('The queue is empty.', true);
+    const name = prompt('Save set as', `Set · ${new Date().toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`);
+    if (!name) return;
+    const p = await lib.createPlaylist(name);
+    await lib.addToPlaylist(p.id, [...ids]);
+    this.toast(`Saved "${name}" (under Playlists).`);
+  }
+
+  private async loadSet(id: string): Promise<void> {
+    const lib = this.app.library;
+    const p = lib.playlist(id);
+    if (!p) return;
+    const queue = lib.playlist(AUTOMIX_ID)!;
+    if (queue.trackIds.length && !confirm(`Replace the ${queue.trackIds.length} items in the queue with "${p.name}"?`)) return this.render();
+    await lib.setPlaylist(AUTOMIX_ID, [...p.trackIds]);
+    this.amTab = 'queue';
+    this.toast(`"${p.name}" is in the queue. Switch Automix on to play it.`);
+  }
+
+  private setFolder = '';
   private setLength = 8;
   private setLoops = true;
 
@@ -387,11 +453,16 @@ export class LibraryView {
       return;
     }
     const queue = lib.playlist(AUTOMIX_ID)!;
-    if (queue.trackIds.length && !confirm(`Replace the ${queue.trackIds.length} tracks in the Automix queue with the new set?`)) return;
+    if (queue.trackIds.length && !confirm(`Replace the ${queue.trackIds.length} items in the Automix queue with the new set?`)) return;
+    if (this.app.engine.decks.some((d) => d.playing) && !confirm('A deck is playing. The set will start on the other deck and mix in from what is playing. Continue?')) return;
+    const folderName = folder ? folder.slice(folder.lastIndexOf('/') + 1) : 'All tracks';
+    const saved = await lib.createPlaylist(`Auto-set · ${folderName} · ${new Date().toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`);
+    await lib.addToPlaylist(saved.id, [...set]);
     await lib.setPlaylist(AUTOMIX_ID, set);
+    this.amTab = 'queue';
     const nLoops = set.filter((id) => id.startsWith(LOOP_PREFIX)).length;
-    this.toast(`Auto-set: ${set.length - nLoops} tracks${nLoops ? ` + ${nLoops} loop bridges` : ''}. Automix is on.`);
-    this.app.automix.setEnabled(true);
+    if (!(await this.app.automix.startQueue())) return this.toast('Could not load the set onto the decks.', true);
+    this.toast(`Auto-set: ${set.length - nLoops} tracks${nLoops ? ` + ${nLoops} loop layers` : ''}, saved under Playlists. Track 1 on A, track 2 on B.`);
   }
 
   private renderToolbar(): void {
@@ -434,10 +505,21 @@ export class LibraryView {
     let list: Row[];
     if (this.view === 'all') {
       list = [...lib.tracks.values()].map((rec, index) => ({ id: rec.id, rec, index }));
-    } else if (this.view === SUGGEST_VIEW) {
-      this.seedId = this.playingSeed() ?? this.seedId;
-      const seed = this.seedId ? lib.tracks.get(this.seedId) : undefined;
-      const matches = seed ? suggestTracks(mixTrack(seed), [...lib.tracks.values()].map(mixTrack)) : [];
+    } else if (this.suggesting) {
+      const s = this.seed();
+      this.seedId = s?.id ?? null;
+      const seed = s ? lib.tracks.get(s.id) : undefined;
+      const eng = this.app.engine;
+      // the other deck's track counts a little too, so the pick fits both decks
+      const otherId = s?.deck !== null && s ? eng.decks[1 - s.deck].track?.id : undefined;
+      const other = otherId ? lib.tracks.get(otherId) : undefined;
+      const exclude = new Set([
+        ...eng.decks.map((d) => d.track?.id ?? ''),
+        ...(lib.playlist(AUTOMIX_ID)?.trackIds ?? []),
+        ...lib.sessionHistory().map((h) => h.trackId),
+      ]);
+      const pool = [...lib.tracks.values()].filter((t) => !exclude.has(t.id) && lib.isAvailable(t.id)).map(mixTrack);
+      const matches = seed ? suggestTracks(mixTrack(seed), pool, 50, other && mixTrack(other)) : [];
       this.matches = new Map(matches.map((m) => [m.id, m]));
       list = matches.map((m, index) => ({ id: m.id, rec: lib.tracks.get(m.id)!, index }));
     } else if (this.view.startsWith(FOLDER)) {
@@ -487,7 +569,7 @@ export class LibraryView {
   private renderHead(): void {
     const sortable = (k: keyof TrackRecord, label: string, w: string) =>
       `<th data-sort="${k}" style="width:${w}">${label}${this.sortable && this.sortKey === k ? (this.sortDir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
-    el('#lib-table thead').innerHTML = `<tr><th style="width:64px">${this.view === HISTORY_ID ? 'Played' : '#'}</th>${sortable('title', 'Title', '38%')}${sortable('artist', 'Artist', '24%')}${sortable('bpm', 'BPM', '64px')}${sortable('key', 'Key', '72px')}${sortable('duration', 'Time', '60px')}${sortable('playCount', 'Plays', '54px')}<th style="width:${this.app.library.playlist(this.view) ? 190 : 140}px"></th></tr>`;
+    el('#lib-table thead').innerHTML = `<tr><th style="width:64px">${this.view === HISTORY_ID ? 'Played' : '#'}</th>${sortable('title', 'Title', '38%')}${sortable('artist', 'Artist', '24%')}${sortable('bpm', 'BPM', '64px')}${sortable('key', 'Key', '72px')}${sortable('duration', 'Time', '60px')}${sortable('playCount', 'Plays', '54px')}<th style="width:${this.app.library.playlist(this.view) && !this.suggesting ? 190 : 140}px"></th></tr>`;
   }
 
   /** Render only the rows in (and just around) the viewport. */
@@ -503,7 +585,7 @@ export class LibraryView {
     this.renderedRange = key;
     const lib = this.app.library;
     const loaded = this.app.engine.decks.map((d) => d.track?.id);
-    const inPlaylist = !!lib.playlist(this.view);
+    const inPlaylist = !!lib.playlist(this.view) && !this.suggesting;
     const parts: string[] = [`<tr class="spacer"><td colspan="8" style="height:${first * ROW_H}px"></td></tr>`];
     for (let i = first; i < last; i++) {
       const x = this.rows[i];
@@ -514,7 +596,7 @@ export class LibraryView {
         loaded[0] === x.id ? 'loaded-0' : '',
         loaded[1] === x.id ? 'loaded-1' : '',
       ].join(' ');
-      const why = this.view === SUGGEST_VIEW ? this.matches.get(x.id)?.reasons.join(' · ') : '';
+      const why = this.suggesting ? this.matches.get(x.id)?.reasons.join(' · ') : '';
       const firstCol = x.playedAt ? new Date(x.playedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : String(i + 1);
       parts.push(`<tr class="${cls}" draggable="true" data-id="${esc(x.id)}" data-index="${x.index}">
         <td class="muted">${firstCol}</td><td title="${esc(r.fileName)}">${esc(r.title)}${why ? ` <small class="why">${esc(why)}</small>` : ''}</td><td>${esc(r.artist)}</td>

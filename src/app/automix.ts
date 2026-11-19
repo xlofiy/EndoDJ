@@ -1,14 +1,21 @@
 /**
  * Automix: plays through the "Automix queue" playlist, beat-matching and crossfading
  * from one deck to the other before each track ends.
+ *
+ * Tracks alternate decks: the 1st, 3rd, 5th … track play on deck A, the 2nd, 4th … on deck B.
+ * Loop Lab entries in the queue are *layers*: they take no deck, but play on top of the
+ * transition into the track after them, tempo- and bar-synced to the outgoing deck.
  */
 import type { Deck } from '../audio/deck';
+import { beatAt, timeOfBeat } from '../audio/mixmath';
+import { findLoop } from '../loops/catalog';
 import { AUTOMIX_ID } from '../library/library';
 import type { App } from './app';
 import { LOOP_PREFIX } from './suggest';
 
-/** a Loop Lab bridge in the queue plays this many beats (fade in + solo + fade out) */
-const BRIDGE_BEATS = 64;
+/** a layer keeps playing this many bars after the crossfade has finished */
+const LAYER_TAIL_BARS = 4;
+const LAYER_GAIN = 0.7;
 
 export class Automix {
   enabled = false;
@@ -17,8 +24,9 @@ export class Automix {
   private transition: { from: Deck; to: Deck; start: number; startX: number } | null = null;
   private loading = false;
   private timer: number | null = null;
-  /** per deck: audio-clock time when a looping bridge should be over */
-  private bridgeEnd = [0, 0];
+  /** per deck: Loop Lab layer to play when that deck comes in */
+  private layers: (string | null)[] = [null, null];
+  private layerSrc: AudioBufferSourceNode | null = null;
   onChange: (() => void) | null = null;
 
   constructor(private app: App) {}
@@ -30,25 +38,53 @@ export class Automix {
       clearInterval(this.timer);
       this.timer = null;
       this.transition = null;
+      this.stopLayer();
     }
     if (on) void this.tick();
     this.onChange?.();
+  }
+
+  /**
+   * Start a fresh mix of the queue: with both decks stopped, the first track goes on deck A
+   * and the second on deck B, then Automix plays A and alternates from there. If a deck is
+   * playing, the first queued track goes on the other deck and the mix continues from it.
+   */
+  async startQueue(): Promise<boolean> {
+    const [a, b] = this.app.engine.decks;
+    this.transition = null;
+    this.layers = [null, null];
+    if (!a.playing && !b.playing) {
+      if (!(await this.loadNext(a))) return false;
+      await this.loadNext(b);
+      this.app.engine.setCrossfader(0);
+    } else {
+      const free = a.playing ? b : a;
+      if (!(await this.loadNext(free))) return false;
+    }
+    this.setEnabled(true);
+    return true;
   }
 
   private queueLength(): number {
     return this.app.library.playlist(AUTOMIX_ID)?.trackIds.length ?? 0;
   }
 
-  /** Load the next queued track on `deck`, cue it at its first beat. */
+  /** Load the next queued track on `deck`, cue it at its first beat. Layers on the way are kept for the transition. */
   private async loadNext(deck: Deck): Promise<boolean> {
     if (this.loading) return false;
     this.loading = true;
+    let layer: string | null = null;
     try {
       while (this.queueLength() > 0) {
         const id = await this.app.library.shiftPlaylist(AUTOMIX_ID);
         if (!id) break;
+        if (id.startsWith(LOOP_PREFIX)) {
+          layer = id.slice(LOOP_PREFIX.length);
+          continue;
+        }
         if (await this.app.loadTrack(deck.index, id)) {
           if (deck.grid) deck.seek(deck.grid.firstBeat);
+          this.layers[deck.index] = layer;
           return true;
         }
       }
@@ -60,13 +96,65 @@ export class Automix {
 
   /** seconds of real time until the end of the deck's track */
   private remaining(deck: Deck): number {
-    if (deck.track?.id.startsWith(LOOP_PREFIX)) return this.bridgeEnd[deck.index] - this.app.engine.ctx.currentTime;
     return (deck.duration - deck.time) / Math.max(0.01, Math.abs(deck.tempoFactor));
   }
 
-  private start(deck: Deck): void {
-    deck.play();
-    this.bridgeEnd[deck.index] = this.app.engine.ctx.currentTime + (BRIDGE_BEATS * 60) / Math.max(60, deck.effectiveBpm || 120);
+  /** Play a Loop Lab loop on top of the mix, at the lead deck's tempo, starting on its next bar. */
+  private async startLayer(loopId: string, lead: Deck): Promise<void> {
+    const def = findLoop(loopId);
+    if (!def || def.bpm <= 0) return;
+    let buf: AudioBuffer;
+    try {
+      buf = await this.app.looplab.buffer(loopId);
+    } catch {
+      return; // a missing layer must not stop the mix
+    }
+    const eng = this.app.engine;
+    const ctx = eng.ctx;
+    const bpm = lead.effectiveBpm > 0 ? lead.effectiveBpm : def.bpm;
+    let delay = 0;
+    if (lead.grid && lead.playing) {
+      const bar = Math.ceil(beatAt(lead.grid, lead.time) / 4) * 4;
+      delay = Math.max(0, (timeOfBeat(lead.grid, bar) - lead.time) / Math.max(0.01, lead.tempoFactor));
+    }
+    // shortcut: rate-based tempo match (pitch moves with tempo); fine for the unpitched drum loops Auto-set picks
+    this.stopLayer();
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    src.playbackRate.value = bpm / def.bpm;
+    const gain = ctx.createGain();
+    const barSec = (4 * 60) / bpm;
+    const t0 = ctx.currentTime + delay;
+    const end = t0 + this.fadeSeconds + LAYER_TAIL_BARS * barSec;
+    gain.gain.setValueAtTime(0, ctx.currentTime);
+    gain.gain.setValueAtTime(LAYER_GAIN, t0);
+    gain.gain.setValueAtTime(LAYER_GAIN, end - barSec);
+    gain.gain.linearRampToValueAtTime(0, end);
+    src.connect(gain).connect(eng.masterBus);
+    src.start(t0);
+    src.stop(end + 0.05);
+    src.onended = () => {
+      gain.disconnect();
+      if (this.layerSrc === src) this.layerSrc = null;
+    };
+    this.layerSrc = src;
+  }
+
+  /** start the layer queued for `deck` (if any), synced to `lead` */
+  private playLayer(deck: Deck, lead: Deck): void {
+    const id = this.layers[deck.index];
+    this.layers[deck.index] = null;
+    if (id) void this.startLayer(id, lead);
+  }
+
+  private stopLayer(): void {
+    try {
+      this.layerSrc?.stop();
+    } catch {
+      /* not started yet */
+    }
+    this.layerSrc = null;
   }
 
   private async tick(): Promise<void> {
@@ -83,7 +171,6 @@ export class Automix {
       if (t >= 1 || !from.playing) {
         eng.setCrossfader(target);
         from.pause();
-        if (from.track?.id.startsWith(LOOP_PREFIX)) from.unload(); // a loop never ends: free the deck for the next track
         this.transition = null;
         this.app.onControl?.();
       }
@@ -102,7 +189,8 @@ export class Automix {
       }
       eng.setCrossfader(target.index === 0 ? 0 : 1);
       eng.strips[target.index].set('volume', Math.max(eng.strips[target.index].values.volume, 0.8));
-      this.start(target);
+      target.play();
+      this.playLayer(target, target);
       this.app.onControl?.();
       return;
     }
@@ -116,9 +204,10 @@ export class Automix {
     if (this.remaining(from) <= this.fadeSeconds && !to.playing) {
       if (to.grid && from.grid) to.syncTo(from);
       eng.strips[to.index].set('volume', Math.max(eng.strips[to.index].values.volume, 0.8));
-      this.start(to);
+      to.play();
       if (to.grid && from.grid) to.alignPhase(from);
       this.transition = { from, to, start: eng.ctx.currentTime, startX: eng.crossfader };
+      this.playLayer(to, from);
     }
   }
 }

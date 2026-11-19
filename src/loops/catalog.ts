@@ -1,5 +1,5 @@
 /**
- * Loop Lab catalogue for EDM, rave, techno, hardstyle, Jersey club, scene/electro, breakcore and hyperpop:
+ * Loop Lab catalogue for EDM, rave, techno, eurobeat, hardstyle, Jersey club, scene/electro, breakcore and hyperpop:
  *  - CC0 (public-domain) loops and FX from OpenGameArt, cut/verified by the pipeline described
  *    in docs/THIRD_PARTY.md and shipped in public/loops/ (first in the list), and
  *  - original loops and FX synthesised from code in this repository (MIT).
@@ -7,8 +7,8 @@
  */
 import { Canvas, clap, crush, cymbal, hat, kick, noise, snare, sweep, synth, SVF, softClip, TAU, type SynthNote } from './dsp';
 
-export type Genre = 'EDM' | 'Rave' | 'Techno' | 'Hardstyle' | 'Jersey Club' | 'Scene' | 'Breakcore' | 'Hyperpop' | 'FX';
-export const GENRES: Genre[] = ['EDM', 'Rave', 'Techno', 'Hardstyle', 'Jersey Club', 'Scene', 'Breakcore', 'Hyperpop', 'FX'];
+export type Genre = 'EDM' | 'Rave' | 'Techno' | 'Eurobeat' | 'Hardstyle' | 'Jersey Club' | 'Scene' | 'Breakcore' | 'Hyperpop' | 'FX';
+export const GENRES: Genre[] = ['EDM', 'Rave', 'Techno', 'Eurobeat', 'Hardstyle', 'Jersey Club', 'Scene', 'Breakcore', 'Hyperpop', 'FX'];
 
 export interface LoopDef {
   id: string;
@@ -70,6 +70,40 @@ const BUNDLED: LoopDef[] = [
     key: 'Bm',
     file: 'cc0-edm-technomania.ogg',
     credit: { title: "Technomania101 - 2000's europop electronic dance music", author: 'Fupi', url: `${OGA}technomania101-2000s-europop-electronic-dance-music`, license: 'CC0' },
+  },
+  {
+    id: 'cc0-eurobeat-fever-stadium',
+    name: 'Fever Stadium',
+    genre: 'Eurobeat',
+    kind: 'synth',
+    bpm: 165,
+    bars: 8,
+    steadyBeat: true,
+    file: 'cc0-eurobeat-fever-stadium.ogg',
+    credit: { title: 'Fever Stadium', author: 'MintoDog', url: `${OGA}fever-stadium`, license: 'CC0' },
+  },
+  {
+    id: 'cc0-eurobeat-fever-climax',
+    name: 'Fever Stadium Climax',
+    genre: 'Eurobeat',
+    kind: 'synth',
+    bpm: 180,
+    bars: 8,
+    steadyBeat: true,
+    file: 'cc0-eurobeat-fever-climax.ogg',
+    credit: { title: 'Fever Stadium (climax version)', author: 'MintoDog', url: `${OGA}fever-stadium`, license: 'CC0' },
+  },
+  {
+    id: 'cc0-eurobeat-super-santa',
+    name: 'Super Santa Claus',
+    genre: 'Eurobeat',
+    kind: 'synth',
+    bpm: 170,
+    bars: 8,
+    steadyBeat: true,
+    key: 'Am',
+    file: 'cc0-eurobeat-super-santa.ogg',
+    credit: { title: 'Super Santa Claus', author: 'MintoDog', url: `${OGA}super-santa-claus`, license: 'CC0' },
   },
   {
     id: 'cc0-edm-simple-drumbeat',
@@ -758,6 +792,48 @@ export const LOOPS: LoopDef[] = [
       pattern('x.....x...x.....', st, 4, (t) => kick(c, t, { f0: 200, f1: 60, decay: 0.08, drive: 2, gain: 0.7 }));
       pattern('....x.......x...', st, 4, (t, _a, i) => snare(c, t, 850 + i, { gain: 0.6, bright: 1 }));
       pattern('xxx.x.xxx.x.xx.x', st, 4, (t, _a, i) => hat(c, t, 860 + i, { decay: 0.015, gain: 0.18 }));
+    },
+  },
+
+  // ---------------------------------------------------------------- Eurobeat (155 BPM)
+  {
+    id: 'eurobeat-drums',
+    name: 'Eurobeat Drums',
+    genre: 'Eurobeat',
+    kind: 'drums',
+    bpm: 155,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      const st = s16(bpm);
+      pattern('x...x...x...x...', st, 4, (t) => kick(c, t, { f0: 170, f1: 52, decay: 0.2, drive: 1.8 }));
+      pattern('....x.......x...', st, 4, (t, _a, i) => snare(c, t, 940 + i, { gain: 0.7, tone: 200, bright: 0.7 }));
+      pattern('..x...x...x...x.', st, 4, (t, _a, i) => hat(c, t, 950 + i, { decay: 0.1, gain: 0.32 }));
+      pattern('xxxxxxxxxxxxxxxx', st, 4, (t, _a, i) => hat(c, t, 960 + i, { decay: 0.012, gain: 0.1, pan: i % 2 ? 0.3 : -0.3 }));
+    },
+  },
+  {
+    id: 'eurobeat-octave-bass',
+    key: 'Am',
+    name: 'Eurobeat Octave Bass',
+    genre: 'Eurobeat',
+    kind: 'bass',
+    bpm: 155,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      const st = s16(bpm);
+      // the classic off-beat octave bass: low on the beat-and, high on the 16th after
+      const roots = [45, 41, 43, 45]; // Am – F – G – Am
+      const notes: SynthNote[] = [];
+      for (let bar = 0; bar < 4; bar++)
+        for (let b = 0; b < 4; b++) {
+          notes.push({ t: (bar * 16 + b * 4 + 2) * st, dur: st * 0.8, note: roots[bar] - 12 });
+          notes.push({ t: (bar * 16 + b * 4 + 3) * st, dur: st * 0.8, note: roots[bar] });
+        }
+      synth(c, notes, { wave: 'saw', cutoff: 700, envMod: 1600, envDecay: 0.06, res: 0.9, gain: 0.6, drive: 1.4 });
+      synth(c, chordStabs(roots.map((r) => [r + 12, r === 45 ? MINOR : MAJOR]), [0, 8], bpm, 6), { wave: 'supersaw', cutoff: 2500, detune: 15, gain: 0.25, width: 0.9 });
+      pattern('x...x...x...x...', st, 4, (t) => kick(c, t, { f0: 170, f1: 52, decay: 0.18, drive: 1.8, gain: 0.85 }));
     },
   },
 

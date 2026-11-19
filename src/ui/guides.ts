@@ -444,12 +444,16 @@ export const GUIDES: Guide[] = [
       <li>Search finds titles, artists and BPMs. Click a column header to sort (Key sorts around the Camelot wheel).</li>
       <li><b>+ New playlist</b> makes a setlist. Drag tracks onto it from All tracks, and reorder with ↑ ↓.</li>
       <li><b>Folders</b> lists the sub-folders of your music folder (your genres). Click one to see only its tracks.</li>
-      <li><b>Q</b> adds a track to the Automix queue. Open <b>Automix queue</b> and switch <b>Automix on</b>: EndoDJ mixes
-        the queue for you, with matched tempo and a crossfade.</li>
-      <li><b>Auto-set</b> (in the Automix queue) builds a set from a folder: it starts slow, then picks the best tempo and
-        key match each time, adds Loop Lab drum loops as bridges where two tracks clash, and starts Automix.</li>
-      <li><b>Suggestions</b> lists the tracks that mix best after the one playing (or selected), with the reason, and the
-        Loop Lab loops of that folder's genre that fit its key.</li>
+      <li><b>Q</b> adds a track to the Automix queue. Open <b>Automix queue</b> and switch <b>Automix on</b>: with both
+        decks stopped, track 1 goes on deck A and track 2 on deck B, and the mix alternates from there (odd tracks on A,
+        even tracks on B), with matched tempo and a crossfade.</li>
+      <li><b>Auto-set</b> builds a set from a folder: it starts slow, then picks the best tempo and key match each time,
+        loads it onto A and B, saves it under Playlists and starts Automix.</li>
+      <li><b>Layers</b>: a Loop Lab loop in the queue takes no deck. It plays on top of the transition into the track
+        after it, in time with the mix. Auto-set adds drum-loop layers where two tracks clash.</li>
+      <li><b>Suggestions</b> (a tab in the Automix queue) lists the tracks that mix best after deck A or B, with the
+        reason, leaving out what is queued or already played, plus loop layers that fit.</li>
+      <li><b>Save set</b> keeps the queue as a playlist; <b>Load set</b> puts a saved set back in the queue.</li>
       <li>History lists everything you played this session. Export it as your setlist.</li>
       <li>The <b>Layout</b> button (top bar) or the bar above the song list gives the list more room.</li>
     </ul>`,

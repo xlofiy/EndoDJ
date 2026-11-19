@@ -61,15 +61,24 @@ export function matchScore(a: MixTrack, b: MixTrack): Match {
   return { id: b.id, score: 0.5 * tempo + 0.35 * key + (sameGenre ? 0.15 : 0), reasons };
 }
 
-/** Tracks that mix well after `seed`, best first. */
-export function suggestTracks(seed: MixTrack, tracks: Iterable<MixTrack>, max = 50): Match[] {
+/**
+ * Tracks that mix well after `seed`, best first. `also` (the track on the other deck) adds a
+ * smaller share, so between equal matches the one that also fits the other deck wins.
+ */
+export function suggestTracks(seed: MixTrack, tracks: Iterable<MixTrack>, max = 50, also?: MixTrack): Match[] {
   const out: Match[] = [];
-  for (const t of tracks) if (t.id !== seed.id && t.bpm > 0) out.push(matchScore(seed, t));
+  for (const t of tracks) {
+    if (t.id === seed.id || t.id === also?.id || !(t.bpm > 0)) continue;
+    const m = matchScore(seed, t);
+    if (also) m.score += 0.2 * matchScore(also, t).score;
+    out.push(m);
+  }
   return out.sort((x, y) => y.score - x.score).slice(0, max);
 }
 
 // keyword → Loop Lab genre; checked in order, so specific names come first
 const GENRE_WORDS: [Genre, RegExp][] = [
+  ['Eurobeat', /euro ?beat|para ?para|initial ?d/],
   ['Jersey Club', /jersey|baltimore|club ?music/],
   ['Hardstyle', /hardstyle|rawstyle|hard ?dance|gabber|hardcore/],
   ['Breakcore', /breakcore|amen|breaks/],
@@ -100,8 +109,8 @@ export const LOOP_PREFIX = 'loop:';
 
 /**
  * Auto-set: start with the slowest track (warm-up), then keep picking the best-matching unused
- * track, preferring a steady or rising tempo. With `loops`, a drum loop of the genre bridges
- * transitions whose key or tempo does not match well.
+ * track, preferring a steady or rising tempo. With `loops`, a drum loop of the genre is queued as a
+ * layer over transitions whose key or tempo does not match well (layers take no deck).
  */
 export function buildSet(tracks: MixTrack[], length: number, loops: LoopDef[] = []): string[] {
   const pool = tracks.filter((t) => t.bpm > 0);

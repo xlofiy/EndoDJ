@@ -41,6 +41,7 @@ describe('mix suggestions', () => {
   it('guesses the Loop Lab genre from folder names', () => {
     expect(genreOf('Song MP3s/Hardstyle/x.mp3')).toBe('Hardstyle');
     expect(genreOf('Song MP3s/Jersey Club/x.mp3')).toBe('Jersey Club');
+    expect(genreOf('Song MP3s/Eurobeat/x.mp3')).toBe('Eurobeat');
     expect(genreOf('Song MP3s/House/Deep/x.mp3')).toBe('EDM');
     expect(genreOf('Song MP3s/Drum and Bass/x.mp3')).toBe('Rave');
     expect(genreOf('Song MP3s/Misc/x.mp3')).toBe(null);
@@ -71,5 +72,15 @@ describe('mix suggestions', () => {
     const loops = [l('synthAm', 'Am'), l('synthF#', 'F#'), l('drums')];
     expect(loopsFor('Techno', 'Am', loops).map((x) => x.id)).toEqual(['drums', 'synthAm']);
     expect(loopsFor(null, 'Am', loops)).toEqual([]);
+  });
+});
+
+describe('suggestions for two decks', () => {
+  it('prefers the track that also fits the other deck, and never suggests the decks themselves', () => {
+    const a = t('a', 128, 'Am', 'M/House/a.mp3');
+    const b = t('b', 128, 'Em', 'M/House/b.mp3');
+    const list = suggestTracks(a, [a, b, t('x', 128, 'Dm', 'M/House/x.mp3'), t('y', 128, 'Em', 'M/House/y.mp3')], 50, b);
+    // Dm (7A) and Em (9A) both sit one step from Am (8A); only Em also fits deck B
+    expect(list.map((m) => m.id)).toEqual(['y', 'x']);
   });
 });

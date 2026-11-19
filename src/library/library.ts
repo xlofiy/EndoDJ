@@ -325,7 +325,7 @@ export class Library {
   async setPlaylist(id: string, trackIds: string[]): Promise<void> {
     const p = this.playlist(id);
     if (!p) return;
-    p.trackIds = trackIds;
+    p.trackIds = [...trackIds]; // never share the caller's array: automix shifts the queue in place
     await this.db.put('playlists', p);
     this.emit();
   }
