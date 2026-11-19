@@ -59,5 +59,7 @@ Keys are labelled only where detection was confident (margin ≥ 0.05).
 
 ### Not found
 No CC0 breakcore, hyperpop or scene loops passed the checks; those genres use EndoDJ's own
-synthesised loops (`src/loops/catalog.ts`, MIT). Freesound.org was not usable from the build
+synthesised loops (`src/loops/catalog.ts`, MIT). The same goes for Hardstyle and Jersey Club: the only
+CC0 hardstyle material found (OpenGameArt, "Hardstyler" by Of Far Different Nature) is a 28 s track
+without a clear, loopable tempo, so it is not bundled. Freesound.org was not usable from the build
 environment (it rejects automated requests; its API needs a personal key).

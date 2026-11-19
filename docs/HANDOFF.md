@@ -69,6 +69,30 @@ FX → history → automix crossfade), with no console errors:
   crossfader curves are generated from `key.ts` / `mixmath.ts`. "Show me" closes Settings and
   highlights the control (`.spotlight`). Settings now has General / Audio / Guides tabs.
 
+## Session 6 additions
+- **Native MIDI** (`electron/midi-bridge.cjs`, tested): the desktop app talks to the controller through
+  RtMidi (`@julusian/midi`, prebuilt binaries unpacked from the asar; CI checks they are in the app)
+  in the main process. Auto-connects to the FLX2, reconnects on hot-plug, opens the matching output
+  for LEDs. The page never opens Web MIDI ports in the desktop app (Windows: one program per port);
+  it falls back to Web MIDI only if the native MIDI system cannot start. `src/midi/midi.ts` handles
+  both paths.
+- **Library**: BPM / key / length analysed automatically in the background (`App.analyseLibrary`);
+  sub-folders of imported folders in the sidebar (`src/library/folders.ts`, tested).
+- **Automix / Suggestions / Auto-set** (`src/app/suggest.ts`, tested): Automix controls live in the
+  Automix queue view; Suggestions ranks tracks by tempo (half/double aware), Camelot key and genre
+  folder, and offers Loop Lab loops of the folder's genre; Auto-set builds a set from a folder and
+  inserts drum-loop bridges (queue ids `loop:<id>`, loaded through `App.loadTrack`) where tracks clash.
+- **Waveforms**: beat ticks, numbered bar lines and gold 8-bar phrase lines; sections strip on the
+  overview (`src/audio/sections.ts`, tested) — click it to jump to intro / drop / break / outro.
+- **Effects**: ping-pong, wah, tremolo, distortion, noise sweep; deck effects brake, backspin and
+  slip beat roll (`Deck.spinDown` / `Deck.roll`, tested), on the Pad FX pads.
+- **PARTS** (`src/audio/parts.ts`): cut bass / vocal (centre of the mids) / instru (sides) / hats per
+  deck. Linkwitz-Riley crossovers + mid/side; flat with all parts on (measured in the browser). Not AI
+  stem separation — see ROADMAP.
+- **Loops**: 20 more synthesised loops (two per genre plus Hardstyle and Jersey Club, four each).
+- **Fixes**: BPM low-band ripple (40-60 Hz kicks could pull the tempo to 3/4); a track loaded while
+  background analysis ran lost its beat grid; Web Audio low/high-pass Q is in dB.
+
 ## DDJ-FLX2 facts (from the official manual DRI1917A, downloaded from downloads.support.alphatheta.com)
 - Per deck: jog (top = scratch, outer = bend, SHIFT + top = search), 8 pads, SHIFT, CUE (SHIFT = start),
   PLAY/PAUSE, BEAT SYNC (SHIFT + BEAT SYNC → pads 1-4 pick Hot Cue / Pad FX / Beat Loop / Sampler), TEMPO.
@@ -91,6 +115,9 @@ Nothing below has been tested on the physical controller yet:
 4. **Audio output** — does the OS expose the FLX2's sound card with 4 output channels?
    If yes, Settings → "4 channels" gives headphone cueing on the controller's headphone jack.
 5. **LEDs** — do the play/cue/hot-cue LEDs follow the app state?
+6. **Native MIDI on Windows** — the desktop app should show "DDJ-FLX2" in the top bar right after start,
+   without any browser permission prompt. If it says another program uses the port, close rekordbox /
+   Serato / VirtualDJ.
 
 ## Tech choices (and why)
 - **TypeScript + Vite, no UI framework** — fast to build, easy to read, runs in any Chromium browser.
@@ -107,6 +134,9 @@ Nothing below has been tested on the physical controller yet:
 | `src/app/app.ts` | Glue: loading/analysis, control-event dispatcher (MIDI, keyboard, screen) |
 | `src/app/automix.ts` | Automix (queue → load, sync, crossfade) |
 | `src/app/sampler.ts` | 8-slot sampler |
+| `src/app/suggest.ts` | Mix suggestions, genre from folder names, Auto-set (pure, tested) |
+| `src/audio/parts.ts` | PARTS splitter (bass / vocal / instru / hats) |
+| `src/audio/sections.ts` | Intro / drop / break / outro detection (pure, tested) |
 | `src/audio/engine.ts` | AudioContext, channel strips, FX unit, output routing, recorder |
 | `src/audio/deck.ts` | Deck transport logic (cue, hot cues, loops, jog, sync) |
 | `src/audio/deck-processor.ts` | AudioWorklet wrapper around `player-core.ts` |
@@ -120,10 +150,10 @@ Nothing below has been tested on the physical controller yet:
 | `src/library/*` | IndexedDB, library model, export formats (tested) |
 | `src/midi/mapping.ts` | MIDI → control engine, 14-bit, jog decoding, MIDI Learn (tested) |
 | `src/midi/ddj-flx2.ts` | Default DDJ-FLX2 mapping (**unverified on hardware**) |
-| `src/midi/midi.ts` | Web MIDI device handling, persistence |
+| `src/midi/midi.ts` | MIDI device handling (native bridge in the desktop app, else Web MIDI), persistence |
 | `src/ui/*` | DOM UI, library/Loop Lab view, canvas waveform + platter renderers, prefs |
 | `src/loops/*` | Loop Lab synthesis, catalogue, worker, runtime |
-| `electron/*` | Desktop app main process, preload, file-access rules |
+| `electron/*` | Desktop app main process, preload, file-access rules, native MIDI bridge |
 | `tests/` | Vitest unit tests |
 
 ## Control ids
@@ -160,4 +190,8 @@ These are the contract between MIDI, keyboard and UI (`App.handleControl`).
   Aero Scene (Vista) theme.
 - Session 4: Frutiger Aero redesign with day/night sky, platters by default, Settings tabs + Guides.
 - Session 5: cover art on platters; FLX2 mapping aligned with the official manual (Pad FX mode, sampler
-  stop, MASTER CUE; removed controls the FLX2 lacks); guided controller test with one-click fixes.
+  stop, MASTER CUE; removed controls the FLX2 lacks); guided controller test with one-click fixes;
+  auto-update from GitHub Releases.
+- Session 6: native MIDI bridge; automatic analysis; folder tree; Automix in the library, Suggestions,
+  Auto-set; beat/bar/phrase markers and sections; more effects and deck effects; PARTS; 20 loops
+  incl. Hardstyle and Jersey Club; BPM and load-race fixes; tidier decks.
