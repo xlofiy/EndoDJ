@@ -227,7 +227,9 @@ export class LibraryView {
         ? lib.tracks.size
           ? 'No tracks match your search.'
           : 'Your library is empty. Click "Add folder" or "Add files", or drop audio files here. Want loops? Open Loop Lab on the left.'
-        : 'Nothing here yet. Drag tracks from "All tracks" onto a playlist in the sidebar.';
+        : this.view === SUGGEST_VIEW
+          ? ''
+          : 'Nothing here yet. Drag tracks from "All tracks" onto a playlist in the sidebar.';
   }
 
   // ------------------------------------------------------------------ sidebar & toolbar
@@ -258,7 +260,10 @@ export class LibraryView {
     side.querySelectorAll<HTMLElement>('[data-view]').forEach((it) => {
       const id = it.dataset.view!;
       it.onclick = () => {
-        if (id === SUGGEST_VIEW) this.seedId = this.playingSeed() ?? this.app.selectedTrackId;
+        if (id === SUGGEST_VIEW) {
+          const loaded = this.app.engine.decks.map((d) => d.track?.id).find((t) => t && this.app.library.tracks.has(t));
+          this.seedId = this.playingSeed() ?? this.app.selectedTrackId ?? loaded ?? null;
+        }
         this.view = id;
         if (id !== LOOPLAB_VIEW) this.app.looplab.stopPreview();
         this.render();
