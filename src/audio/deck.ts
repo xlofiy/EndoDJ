@@ -484,11 +484,17 @@ export class Deck {
   syncTo(leader: Deck): boolean {
     if (!this.grid || !leader.grid || !leader.loaded) return false;
     this.setTempoFactor(syncTempo(this.grid.bpm, leader.effectiveBpm));
-    if (this.playing && leader.playing) this.alignPhase(leader);
-    else if (leader.playing === false && this.playing === false) this.alignPhase(leader);
+    // align beat phase (when the leader is playing, or both decks are paused)
+    if (leader.playing || !this.playing) this.alignPhase(leader);
     this.synced = true;
     this.emit();
     return true;
+  }
+
+  /** Match only the tempo of `leader` (used while the leader's pitch fader moves). */
+  followTempo(leader: Deck): void {
+    if (!this.grid || !leader.grid) return;
+    this.setTempoFactor(syncTempo(this.grid.bpm, leader.effectiveBpm));
   }
 
   alignPhase(leader: Deck): void {
