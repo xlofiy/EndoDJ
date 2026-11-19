@@ -33,9 +33,16 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not started
 - [ ] Slicer / beat roll / pad FX
 - [x] Quantize for cues & loops
 - [~] Controller LED feedback (play/cue/sync/hot-cue LEDs) — implemented, unverified on hardware
-- [ ] Desktop packaging (Electron or Tauri) with native file access and audio device routing
+- [x] Desktop packaging (Electron) with native file access; installers for Windows/macOS/Linux built in CI (unsigned)
 - [x] Waveform colouring by frequency band (bass = warm, highs = cool)
 - [ ] Track metadata reading (ID3 / MP4 tags, artwork)
+
+## Phase 2.5 — Scene features
+- [x] Loop Lab: built-in genre loops + FX one-shots, preview, load to deck/pads, loop-pack import
+- [x] Themes (Endo / Classic), round jog platters, compact layout, resizable song list
+- [x] Virtualised song list (tested with 20 000 tracks)
+- [ ] More Loop Lab content: curated CC0 packs from Freesound/OpenGameArt (needs network access + licence review)
+- [ ] Code-signed installers (Windows certificate, Apple Developer ID) and auto-update
 
 ## Phase 3 — Beyond
 - [ ] Stem separation (vocals / instruments) — ML model in WebGPU/ONNX

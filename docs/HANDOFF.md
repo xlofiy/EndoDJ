@@ -7,9 +7,11 @@ Read this first when resuming work (human or AI).
 git clone https://github.com/xlofiy/EndoDJ.git && cd EndoDJ
 git checkout claude/epic-dijkstra-m4lk0o   # development branch (not merged to main yet)
 npm install
-npm test        # 30 unit tests, all should pass
+npm test        # unit tests, all should pass
 npm run dev     # open the printed URL in Chrome / Edge, click "Start EndoDJ"
+npm run desktop # or run it as the desktop app (needs the Electron download)
 ```
+Installers: see `docs/INSTALL.md` (built by `.github/workflows/desktop.yml`).
 
 ## Current state (end of session 1)
 Working and verified end-to-end in headless Chromium (load → BPM → play → sync → loop → hot cue →
@@ -27,6 +29,22 @@ FX → history → automix crossfade), with no console errors:
 - Automix from the "Automix queue" playlist, mix recording (WebM/Opus), sampler (8 slots)
 - Web MIDI with DDJ-FLX2 default mapping, MIDI monitor, MIDI Learn, mapping import/export,
   LED feedback, keyboard shortcuts
+
+## Session 2 additions
+- **Loop Lab** (`src/loops/`): `dsp.ts` (pure synthesis toolkit), `catalog.ts` (18 loops + 8 FX,
+  rendered deterministically), `loop-worker.ts` (renders off the UI thread), `looplab.ts` (cache,
+  preview, deck/pad loading). Free sample sites were unreachable from the build environment, so all
+  sounds are synthesised in code (MIT, no licence questions). Tests check every loop renders cleanly
+  and that auto-BPM finds its exact tempo.
+- **BPM detection rewrite** (`src/audio/bpm.ts`): metrical comb scan over three 10-s windows +
+  octave rule. The old autocorrelation stage mis-read busy drum loops (e.g. 106.67 for 128).
+- **UI**: new theme (`src/style.css`, `src/ui/prefs.ts`), round platters (`src/ui/platter-view.ts`),
+  virtualised library + Loop Lab view (`src/ui/library-view.ts`), compact layout + splitter,
+  redraw-skipping canvases. Verified at 60 fps with 20 000 tracks, both decks + platters running.
+- **Desktop app** (`electron/`): `main.cjs` (app:// origin, permissions, native pickers, path-guarded
+  file reads), `preload.cjs`, `paths.cjs` (tested). Packaging config lives in `package.json` → `build`.
+  The Electron binary could not be downloaded in the build environment, so the desktop app itself
+  was verified only through CI builds — **test-run the installer on a real machine**.
 
 ## ⚠️ Hardware verification checklist (needs the real DDJ-FLX2)
 Nothing below has been tested on the physical controller yet:
@@ -67,7 +85,9 @@ Nothing below has been tested on the physical controller yet:
 | `src/midi/mapping.ts` | MIDI → control engine, 14-bit, jog decoding, MIDI Learn (tested) |
 | `src/midi/ddj-flx2.ts` | Default DDJ-FLX2 mapping (**unverified on hardware**) |
 | `src/midi/midi.ts` | Web MIDI device handling, persistence |
-| `src/ui/*` | DOM UI and canvas waveform renderers |
+| `src/ui/*` | DOM UI, library/Loop Lab view, canvas waveform + platter renderers, prefs |
+| `src/loops/*` | Loop Lab synthesis, catalogue, worker, runtime |
+| `electron/*` | Desktop app main process, preload, file-access rules |
 | `tests/` | Vitest unit tests |
 
 ## Control ids
@@ -98,3 +118,5 @@ These are the contract between MIDI, keyboard and UI (`App.handleControl`).
 
 ## Progress log
 - Session 1: complete v0.1 feature set (see "Current state"); hardware verification pending.
+- Session 2: Loop Lab, BPM detection rewrite, new theme/platters/compact layout, virtualised list,
+  Electron desktop app + CI installers. Open question from the owner: "ponytail" (unclear what it refers to).

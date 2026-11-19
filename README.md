@@ -2,15 +2,21 @@
 
 *Endo* — from the Greek ἔνδον, "inside, within".
 
-EndoDJ is free, open source DJ software that runs in your browser (Chrome / Edge), built first and
-foremost for the **Pioneer DJ / AlphaTheta DDJ-FLX2** controller — no license fees, no subscriptions.
+EndoDJ is free, open source DJ software — a desktop app for Windows, macOS and Linux that also runs
+in Chrome / Edge — built first and foremost for the **Pioneer DJ / AlphaTheta DDJ-FLX2** controller.
+No license fees, no subscriptions. Made for the EDM, rave, techno, scene, breakcore and hyperpop crowd.
 
 > Status: **v0.1 — early development.** Everything below works in the browser; the DDJ-FLX2 MIDI
 > mapping has not been verified on the physical controller yet (see
 > [`docs/HANDOFF.md`](docs/HANDOFF.md#️-hardware-verification-checklist-needs-the-real-ddj-flx2)).
 > Roadmap: [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
-## Quick start
+## Install
+
+Download the installer for your system — see [`docs/INSTALL.md`](docs/INSTALL.md)
+(Windows `.exe`, macOS `.dmg`, Linux `.AppImage` / `.deb`).
+
+## Run from source
 
 Requirements: [Node.js](https://nodejs.org) 20+ and **Google Chrome or Microsoft Edge**
 (Web MIDI — needed to talk to the controller — is only available in Chromium-based browsers).
@@ -25,6 +31,11 @@ plug in the DDJ-FLX2 and allow MIDI access when the browser asks. Click **Add fo
 
 ## Features
 
+- **Loop Lab** — 18 original loops (EDM, rave, techno, scene, breakcore, hyperpop) + 8 FX one-shots
+  (air horn, riser, impact, laser, siren…), free to use anywhere; seamless looping, exact beat grid,
+  auto-sync to the playing deck, send to sampler pads, import your own loop packs (BPM read from file names)
+- **Look** — "Endo" theme (ocean-blue slanted headings, scene neon, aero gloss) or Classic; optional round
+  jog platters (drag to scratch); compact layout and a resizable song list; "reduce effects" for older laptops
 - **2 decks** — waveform overview + scrolling beat-grid waveform, CDJ-style CUE, play, reverse,
   pitch fader (±6/10/16/50 %), nudge, scratch & pitch-bend with the jog wheels
 - **Auto BPM** detection and beat grid (½ / ×2 correction, "set grid here"), **sync** (tempo + phase)
