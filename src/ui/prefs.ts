@@ -2,6 +2,8 @@
 
 export interface Prefs {
   theme: 'endo' | 'classic';
+  /** sky by day or by night (Aero theme) */
+  mode: 'light' | 'dark';
   platters: boolean;
   lowFx: boolean;
   compact: boolean;
@@ -9,8 +11,9 @@ export interface Prefs {
   libraryHeight: number;
 }
 
-const KEY = 'endodj.prefs.v1';
-const DEFAULTS: Prefs = { theme: 'endo', platters: false, lowFx: false, compact: false, libraryHeight: 0 };
+// v2: Frutiger Aero redesign — new defaults (platters on, light sky)
+const KEY = 'endodj.prefs.v2';
+const DEFAULTS: Prefs = { theme: 'endo', mode: 'light', platters: true, lowFx: false, compact: false, libraryHeight: 0 };
 
 export function loadPrefs(): Prefs {
   try {
@@ -33,6 +36,7 @@ export function savePrefs(p: Prefs): void {
 /** Apply the visual preferences to the document. */
 export function applyPrefs(p: Prefs): void {
   document.documentElement.dataset.theme = p.theme;
+  document.documentElement.dataset.mode = p.mode;
   document.body.classList.toggle('lowfx', p.lowFx);
   document.body.classList.toggle('compact', p.compact);
   document.body.classList.toggle('platters', p.platters);

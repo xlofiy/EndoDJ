@@ -16,13 +16,13 @@ const ROW_H = 26;
 const OVERSCAN = 12;
 
 const GENRE_COLORS: Record<Genre, string> = {
-  EDM: '#19c3ff',
-  Rave: '#ffd23f',
-  Techno: '#9aa7ff',
-  Scene: '#ff3fb4',
-  Breakcore: '#ff6b3d',
-  Hyperpop: '#b6ff3b',
-  FX: '#c9d6ea',
+  EDM: '#0d8fd6',
+  Rave: '#d98a00',
+  Techno: '#4c5fc7',
+  Scene: '#d13b8f',
+  Breakcore: '#d9542b',
+  Hyperpop: '#8a4fd8',
+  FX: '#5d7591',
 };
 
 export function esc(s: string): string {
@@ -211,12 +211,12 @@ export class LibraryView {
       `<div class="item ${this.view === id ? 'active' : ''}" data-view="${esc(id)}" ${droppable ? 'data-drop="1"' : ''}>
         <span>${esc(name)}</span><span class="count">${count}</span></div>`;
     side.innerHTML =
-      item('all', '🎵 All tracks', lib.tracks.size, false) +
-      item(LOOPLAB_VIEW, '🫧 Loop Lab', LOOPS.length, false) +
-      item(HISTORY_ID, '🕘 History (this session)', lib.sessionHistory().length, false) +
-      '<div class="muted group">PLAYLISTS / SETLISTS</div>' +
-      lib.playlists.map((p) => item(p.id, (p.id === AUTOMIX_ID ? '🔁 ' : '📃 ') + p.name, p.trackIds.length, true)).join('') +
-      '<div class="item" id="new-playlist"><span>＋ New playlist</span></div>';
+      item('all', 'All tracks', lib.tracks.size, false) +
+      item(LOOPLAB_VIEW, 'Loop Lab', LOOPS.length, false) +
+      item(HISTORY_ID, 'History', lib.sessionHistory().length, false) +
+      '<div class="label group">Playlists</div>' +
+      lib.playlists.map((p) => item(p.id, p.name, p.trackIds.length, true)).join('') +
+      '<div class="item muted" id="new-playlist"><span>+ New playlist</span></div>';
     side.querySelectorAll<HTMLElement>('[data-view]').forEach((it) => {
       const id = it.dataset.view!;
       it.onclick = () => {

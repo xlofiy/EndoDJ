@@ -35,8 +35,10 @@ plug in the DDJ-FLX2 and allow MIDI access when the browser asks. Click **Add fo
   breakcore, hyperpop) and 8 FX one-shots, free to use anywhere; seamless looping, exact beat grid,
   **auto BPM + key match** to the playing deck, send to sampler pads, import your own loop packs
 - **Key** — automatic key detection (Camelot), key shift, KEY SYNC, key lock (master tempo)
-- **Look** — "Aero Scene" theme (Frutiger Aero / Windows Vista glass + scene neon) or Classic; optional round
-  jog platters (drag to scratch); compact layout and a resizable song list; "reduce effects" for older laptops
+- **Look** — Frutiger Aero: glass panels over an open sky with clouds, bubbles and a green hill; a
+  day/night switch turns the sun into a moon. Round jog platters (drag to scratch), compact layout,
+  resizable song list, Classic theme and "reduce effects" for older laptops
+- **Guides** — Settings → Guides walks through every part of the app with diagrams and a "Show me" button
 - **2 decks** — waveform overview + scrolling beat-grid waveform, CDJ-style CUE, play, reverse,
   pitch fader (±6/10/16/50 %), nudge, scratch & pitch-bend with the jog wheels
 - **Auto BPM** detection and beat grid (½ / ×2 correction, "set grid here"), **sync** (tempo + phase)

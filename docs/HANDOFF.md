@@ -58,8 +58,16 @@ FX → history → automix crossfade), with no console errors:
   loops auto-match the playing deck's BPM **and** key.
 - **CC0 sounds**: 5 loops + 12 FX from OpenGameArt in `public/loops/`, credited in
   `docs/THIRD_PARTY.md` with how they were cut and verified. Freesound needs an API key (not set up).
-- **Look**: "Aero Scene" theme (Vista glass + scene neon) — CSS in `src/style.css`, scoped to
-  `[data-theme='endo']`.
+- **Look**: superseded in session 4 by the Frutiger Aero redesign.
+
+## Session 4 additions
+- **Frutiger Aero redesign** (`src/style.css`, rewritten): design tokens, light glass panels over a CSS
+  sky (`#sky` in `index.html`: sun, moon, stars, clouds, bubbles, hill). `data-mode="light|dark"`
+  switches day/night (top-bar switch + General settings). Persona/scene styling, emoji and inline hint
+  text removed. Platters are on by default (prefs key bumped to `endodj.prefs.v2`).
+- **Guides** (`src/ui/guides.ts`, tested): 14 guides with inline-SVG diagrams; the Camelot wheel and
+  crossfader curves are generated from `key.ts` / `mixmath.ts`. "Show me" closes Settings and
+  highlights the control (`.spotlight`). Settings now has General / Audio / Guides tabs.
 
 ## ⚠️ Hardware verification checklist (needs the real DDJ-FLX2)
 Nothing below has been tested on the physical controller yet:
@@ -139,3 +147,4 @@ These are the contract between MIDI, keyboard and UI (`App.handleControl`).
   Electron desktop app + CI installers.
 - Session 3: Ponytail rules + audit fixes, key detection / shift / lock / sync, bundled CC0 loops & FX,
   Aero Scene (Vista) theme.
+- Session 4: Frutiger Aero redesign with day/night sky, platters by default, Settings tabs + Guides.

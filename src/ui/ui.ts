@@ -12,8 +12,13 @@ import { download, esc, LibraryView } from './library-view';
 import { PlatterView } from './platter-view';
 import { applyPrefs, loadPrefs, savePrefs, type Prefs } from './prefs';
 import { HOTCUE_COLORS, OverviewView, ZoomView, fitCanvas } from './waveform-view';
+import { renderGuides } from './guides';
+
+/** Deck colours (match --deck-a / --deck-b in style.css) */
+const DECK_COLORS = ['#0d9be6', '#5cbf1e'];
 
 type PadMode = 'hotcue' | 'beatloop' | 'beatjump' | 'sampler';
+type SettingsTab = 'general' | 'audio' | 'guides';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = document): T => {
   const el = root.querySelector<T>(sel);
@@ -151,9 +156,7 @@ export class UI {
     const deck = this.app.engine.decks[i];
     const root = $(`#deck-${i}`);
     const n = i + 1;
-    root.dataset.letter = i === 0 ? 'A' : 'B';
     root.innerHTML = `
-      <div class="caption"><span class="spark">✦</span> DECK ${i === 0 ? 'A' : 'B'} <span class="spark">✦</span></div>
       <div class="platter-col"${this.prefs.platters ? '' : ' hidden'}><canvas class="platter" title="Drag to scratch, scroll to nudge"></canvas></div>
       <div class="main-col">
         <div class="info">
@@ -193,7 +196,6 @@ export class UI {
               <option value="beatjump">Beat jump</option>
               <option value="sampler">Sampler</option>
             </select>
-            <span class="muted pad-hint">right-click a pad to clear</span>
           </div>
           <div class="pads" style="margin:4px 0"></div>
           <div class="row loops">
@@ -218,7 +220,7 @@ export class UI {
         <button class="nudge-up" title="Nudge faster (hold)">▶▶</button>
       </div>`;
 
-    const color = i === 0 ? '#19c3ff' : '#ff3fb4';
+    const color = DECK_COLORS[i];
     const zoomCanvas = $<HTMLCanvasElement>(`#zoom-${i}`);
     const ui: DeckUI = {
       root,
@@ -332,10 +334,6 @@ export class UI {
     const modeSel = $<HTMLSelectElement>('.pad-mode', root);
     modeSel.onchange = () => {
       ui.padMode = modeSel.value as PadMode;
-      setText(
-        $('.pad-hint', root),
-        ui.padMode === 'hotcue' ? 'right-click a pad to clear' : ui.padMode === 'sampler' ? 'right-click to load a file · Loop Lab → Pad' : '',
-      );
     };
 
     // drag & drop a library row or an audio file onto the deck
@@ -432,7 +430,7 @@ export class UI {
         }
         case 'beatloop':
           label = `${fmtBeats(BEATLOOP_PAD_SIZES[p])} beat`;
-          bg = deck.loopActive && deck.loop?.beats === BEATLOOP_PAD_SIZES[p] ? '#b6ff3b' : '';
+          bg = deck.loopActive && deck.loop?.beats === BEATLOOP_PAD_SIZES[p] ? '#5cbf1e' : '';
           break;
         case 'beatjump': {
           const j = BEATJUMP_PAD_SIZES[p];
@@ -442,7 +440,7 @@ export class UI {
         case 'sampler': {
           const s = this.app.sampler.slots[p];
           label = s ? s.name.slice(0, 12) : `+ sample ${p + 1}`;
-          bg = s ? (this.app.sampler.isPlaying(p) ? '#b6ff3b' : '#c58bff') : '';
+          bg = s ? (this.app.sampler.isPlaying(p) ? '#5cbf1e' : '#8a4fd8') : '';
           break;
         }
       }
@@ -462,7 +460,7 @@ export class UI {
     const channel = (ch: number) => `
       <div class="ch">
         ${knob(ch, 'trim', 'TRIM')}${knob(ch, 'high', 'HI')}${knob(ch, 'mid', 'MID')}${knob(ch, 'low', 'LOW')}${knob(ch, 'filter', 'FILTER')}
-        <button class="pfl" data-ch="${ch}" title="Headphone cue">CUE 🎧</button>
+        <button class="pfl" data-ch="${ch}" title="Send this channel to your headphones">CUE</button>
         <div class="fader"><input class="vfader" type="range" min="0" max="1" step="0.001" data-ch="${ch}" data-param="volume" /></div>
       </div>`;
     m.innerHTML = `
@@ -470,7 +468,7 @@ export class UI {
       <div class="channels">${channel(0)}<div class="meters"><canvas id="meter-0"></canvas><canvas id="meter-1"></canvas></div>${channel(1)}</div>
       <div class="xfader"><b style="color:var(--deck-a)">A</b><input id="xfader" type="range" min="0" max="1" step="0.001" /><b style="color:var(--deck-b)">B</b>
         <select id="xf-curve" title="Crossfader curve"><option value="smooth">Smooth</option><option value="linear">Linear</option><option value="sharp">Cut</option></select></div>
-      <div class="xfader"><span class="muted">🎧 CUE</span><input id="hp-mix" type="range" min="0" max="1" step="0.001" title="Headphone cue/master mix" /><span class="muted">MST</span>
+      <div class="xfader"><span class="label">Cue</span><input id="hp-mix" type="range" min="0" max="1" step="0.001" title="Headphones: cue / master blend" /><span class="label">Mst</span>
         <input id="hp-level" type="range" min="0" max="1" step="0.001" title="Headphone level" style="max-width:56px" /></div>
       <div class="fx">
         <h3 class="section-title wide" style="justify-self:start">Beat FX</h3>
@@ -548,9 +546,9 @@ export class UI {
     const v = Math.max(0, Math.min(1, (db + 48) / 48));
     if (v <= 0) return;
     const grad = horizontal ? g.createLinearGradient(0, 0, W, 0) : g.createLinearGradient(0, H, 0, 0);
-    grad.addColorStop(0, '#19c3ff');
-    grad.addColorStop(0.7, '#b6ff3b');
-    grad.addColorStop(1, '#ff3fb4');
+    grad.addColorStop(0, '#2fb4f5');
+    grad.addColorStop(0.7, '#8fd63f');
+    grad.addColorStop(1, '#ff5a4d');
     g.fillStyle = grad;
     if (horizontal) g.fillRect(0, 0, W * v, H);
     else g.fillRect(0, H * (1 - v), W, H * v);
@@ -562,6 +560,16 @@ export class UI {
     const eng = this.app.engine;
     $('#midi-status').onclick = () => this.openController();
     $('#settings-btn').onclick = () => void this.openSettings();
+    const modeBtn = $('#mode-btn');
+    const syncMode = () => modeBtn.setAttribute('aria-checked', String(this.prefs.mode === 'dark'));
+    syncMode();
+    modeBtn.onclick = () => {
+      this.setPrefs({ mode: this.prefs.mode === 'dark' ? 'light' : 'dark' });
+      syncMode();
+    };
+    document.querySelectorAll<HTMLButtonElement>('#settings-dlg .tabs button').forEach((b) => {
+      b.onclick = () => void this.openSettings(b.dataset.tab as SettingsTab);
+    });
     $('#help-btn').onclick = () => ($('#help-dlg') as HTMLDialogElement).showModal();
     const layout = $('#layout-btn');
     setText(layout, `Layout: ${this.prefs.compact ? 'Compact' : 'Full'}`);
@@ -629,14 +637,15 @@ export class UI {
   private renderMidiStatus(): void {
     const midi = this.app.midi;
     const el = $('#midi-status');
+    const label = $('span', el);
     if (midi.error) {
-      setText(el, 'MIDI: unavailable');
+      setText(label, 'MIDI unavailable');
       el.title = midi.error;
     } else if (midi.input) {
-      setText(el, `🎛 ${midi.input.name}`);
+      setText(label, midi.input.name ?? 'Controller');
       el.title = 'Controller settings';
     } else {
-      setText(el, 'MIDI: no controller');
+      setText(label, 'No controller');
       el.title = 'Plug in your DDJ-FLX2';
     }
     setClass(el, 'connected', !!midi.input);
@@ -759,20 +768,26 @@ export class UI {
     monEl.scrollTop = monEl.scrollHeight;
   }
 
-  private async openSettings(): Promise<void> {
-    const eng = this.app.engine;
+  private settingsTab: SettingsTab = 'general';
+
+  private async openSettings(tab: SettingsTab = this.settingsTab, guide?: string): Promise<void> {
+    this.settingsTab = tab;
+    const dlg = $('#settings-dlg') as HTMLDialogElement;
+    dlg.querySelectorAll<HTMLButtonElement>('.tabs button').forEach((b) => setClass(b, 'on', b.dataset.tab === tab));
     const body = $('#settings-body');
+    if (!dlg.open) dlg.showModal();
+    if (tab === 'guides') {
+      renderGuides(body, (selector) => this.spotlight(selector), guide);
+      return;
+    }
+    if (tab === 'general') {
+      this.renderGeneralSettings(body);
+      return;
+    }
+    const eng = this.app.engine;
     const devices = await eng.listOutputDevices();
     const multiOk = eng.maxOutputChannels >= 4;
-    const p = this.prefs;
     body.innerHTML = `
-      <h3>Look &amp; feel</h3>
-      <div class="field"><span>Theme</span><select id="pref-theme">
-        <option value="endo">Aero Scene — Vista glass, aurora, scene neon</option>
-        <option value="classic">Classic — plain dark</option></select></div>
-      <div class="field"><span>Jog platters</span><label class="inline"><input type="checkbox" id="pref-platters" ${p.platters ? 'checked' : ''}/> show round platters on the decks (drag to scratch)</label></div>
-      <div class="field"><span>Layout</span><label class="inline"><input type="checkbox" id="pref-compact" ${p.compact ? 'checked' : ''}/> compact decks (bigger song list)</label></div>
-      <div class="field"><span>Performance</span><label class="inline"><input type="checkbox" id="pref-lowfx" ${p.lowFx ? 'checked' : ''}/> reduce visual effects (for older laptops)</label></div>
       <h3>Audio output</h3>
       <div class="field"><span>Output device</span>
         ${
@@ -789,21 +804,7 @@ export class UI {
       <p class="muted">Device reports ${eng.maxOutputChannels} output channels. Sample rate ${eng.ctx.sampleRate} Hz, base latency ${Math.round(eng.ctx.baseLatency * 1000)} ms.</p>
       <h3>Mixing</h3>
       <div class="field"><span>Automix crossfade</span><input id="am-fade" type="number" min="2" max="60" step="1" value="${this.app.automix.fadeSeconds}" /> seconds</div>
-      <div class="field"><span>Sampler volume</span><input id="smp-vol" type="range" min="0" max="1" step="0.01" value="${this.app.sampler.volume}" /></div>
-      <h3>Library</h3>
-      <div class="field"><span>Tracks</span><span>${this.app.library.tracks.size}</span></div>`;
-    const theme = $<HTMLSelectElement>('#pref-theme', body);
-    theme.value = p.theme;
-    theme.onchange = () => this.setPrefs({ theme: theme.value as Prefs['theme'] });
-    const platters = $<HTMLInputElement>('#pref-platters', body);
-    platters.onchange = () => {
-      this.setPrefs({ platters: platters.checked });
-      document.querySelectorAll<HTMLElement>('.platter-col').forEach((c) => (c.hidden = !platters.checked));
-    };
-    const compact = $<HTMLInputElement>('#pref-compact', body);
-    compact.onchange = () => this.setPrefs({ compact: compact.checked });
-    const lowfx = $<HTMLInputElement>('#pref-lowfx', body);
-    lowfx.onchange = () => this.setPrefs({ lowFx: lowfx.checked });
+      <div class="field"><span>Sampler volume</span><input id="smp-vol" type="range" min="0" max="1" step="0.01" value="${this.app.sampler.volume}" /></div>`;
     const mode = $<HTMLSelectElement>('#out-mode', body);
     mode.value = eng.outputMode;
     mode.onchange = () => eng.setOutputMode(mode.value as OutputMode);
@@ -815,7 +816,7 @@ export class UI {
         try {
           await eng.setOutputDevice(dev.value);
           this.toast('Output device changed.');
-          void this.openSettings();
+          void this.openSettings('audio');
         } catch (e) {
           this.toast((e as Error).message, true);
         }
@@ -824,7 +825,7 @@ export class UI {
         try {
           const s = await navigator.mediaDevices.getUserMedia({ audio: true });
           s.getTracks().forEach((t) => t.stop());
-          void this.openSettings();
+          void this.openSettings('audio');
         } catch {
           this.toast('Permission denied — device names stay hidden.', true);
         }
@@ -836,8 +837,54 @@ export class UI {
     };
     const vol = $<HTMLInputElement>('#smp-vol', body);
     vol.oninput = () => this.app.sampler.setVolume(parseFloat(vol.value));
-    const dlg = $('#settings-dlg') as HTMLDialogElement;
-    if (!dlg.open) dlg.showModal();
+  }
+
+  private renderGeneralSettings(body: HTMLElement): void {
+    const p = this.prefs;
+    body.innerHTML = `
+      <h3>Look &amp; feel</h3>
+      <div class="field"><span>Theme</span><select id="pref-theme">
+        <option value="endo">Aero — sky, glass and bubbles</option>
+        <option value="classic">Classic — plain dark</option></select></div>
+      <div class="field"><span>Sky</span><label class="inline"><input type="checkbox" id="pref-dark" ${p.mode === 'dark' ? 'checked' : ''}/> night (also the switch in the top bar)</label></div>
+      <div class="field"><span>Jog platters</span><label class="inline"><input type="checkbox" id="pref-platters" ${p.platters ? 'checked' : ''}/> round platters on the decks (drag to scratch)</label></div>
+      <div class="field"><span>Layout</span><label class="inline"><input type="checkbox" id="pref-compact" ${p.compact ? 'checked' : ''}/> compact decks (bigger song list)</label></div>
+      <div class="field"><span>Performance</span><label class="inline"><input type="checkbox" id="pref-lowfx" ${p.lowFx ? 'checked' : ''}/> reduce visual effects (for older laptops)</label></div>
+      <h3>Library</h3>
+      <div class="field"><span>Tracks</span><span>${this.app.library.tracks.size}</span></div>
+      <p class="muted">New here? Open the <b>Guides</b> tab for a walk-through of every part of EndoDJ.</p>`;
+    const theme = $<HTMLSelectElement>('#pref-theme', body);
+    theme.value = p.theme;
+    theme.onchange = () => this.setPrefs({ theme: theme.value as Prefs['theme'] });
+    const dark = $<HTMLInputElement>('#pref-dark', body);
+    dark.onchange = () => {
+      this.setPrefs({ mode: dark.checked ? 'dark' : 'light' });
+      $('#mode-btn').setAttribute('aria-checked', String(dark.checked));
+    };
+    const platters = $<HTMLInputElement>('#pref-platters', body);
+    platters.onchange = () => {
+      this.setPrefs({ platters: platters.checked });
+      document.querySelectorAll<HTMLElement>('.platter-col').forEach((c) => (c.hidden = !platters.checked));
+    };
+    const compact = $<HTMLInputElement>('#pref-compact', body);
+    compact.onchange = () => this.setPrefs({ compact: compact.checked });
+    const lowfx = $<HTMLInputElement>('#pref-lowfx', body);
+    lowfx.onchange = () => this.setPrefs({ lowFx: lowfx.checked });
+  }
+
+  /** Close Settings and point at a control for a few seconds ("Show me" in the guides). */
+  private spotlight(selector: string): void {
+    const el = document.querySelector<HTMLElement>(selector);
+    if (!el || el.offsetParent === null) {
+      this.toast('That part is hidden right now — check Layout (top bar) or the platter setting.', true);
+      return;
+    }
+    ($('#settings-dlg') as HTMLDialogElement).close();
+    el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    el.classList.remove('spotlight');
+    void el.offsetWidth; // restart the animation
+    el.classList.add('spotlight');
+    window.setTimeout(() => el.classList.remove('spotlight'), 3000);
   }
 
   private buildDialogs(): void {
