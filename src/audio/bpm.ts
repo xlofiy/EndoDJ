@@ -62,7 +62,17 @@ export function onsetEnvelope(
       el += lp * lp;
     }
     energyFull[f] = Math.log1p(1000 * (ef / hop));
-    energyLow[f] = Math.log1p(1000 * (el / hop));
+    energyLow[f] = el / hop;
+  }
+  // a 2.5 ms frame is shorter than one cycle of a 40-60 Hz kick, so the low band's frame energy
+  // ripples with the waveform itself: average it over ±10 ms (centred, so no lag) before the log
+  const R = Math.round(envRate * 0.01);
+  const lowRaw = energyLow.slice();
+  let run = 0;
+  for (let f = -R; f < frames; f++) {
+    if (f + R < frames) run += lowRaw[f + R];
+    if (f - R - 1 >= 0) run -= lowRaw[f - R - 1];
+    if (f >= 0) energyLow[f] = Math.log1p((1000 * run) / (Math.min(frames - 1, f + R) - Math.max(0, f - R) + 1));
   }
   const env = new Float32Array(frames);
   for (let f = 1; f < frames; f++) {

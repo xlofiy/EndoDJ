@@ -1,5 +1,5 @@
 /**
- * Loop Lab catalogue for EDM, rave, techno, scene/electro, breakcore and hyperpop:
+ * Loop Lab catalogue for EDM, rave, techno, hardstyle, Jersey club, scene/electro, breakcore and hyperpop:
  *  - CC0 (public-domain) loops and FX from OpenGameArt, cut/verified by the pipeline described
  *    in docs/THIRD_PARTY.md and shipped in public/loops/ (first in the list), and
  *  - original loops and FX synthesised from code in this repository (MIT).
@@ -7,8 +7,8 @@
  */
 import { Canvas, clap, crush, cymbal, hat, kick, noise, snare, sweep, synth, SVF, softClip, TAU, type SynthNote } from './dsp';
 
-export type Genre = 'EDM' | 'Rave' | 'Techno' | 'Scene' | 'Breakcore' | 'Hyperpop' | 'FX';
-export const GENRES: Genre[] = ['EDM', 'Rave', 'Techno', 'Scene', 'Breakcore', 'Hyperpop', 'FX'];
+export type Genre = 'EDM' | 'Rave' | 'Techno' | 'Hardstyle' | 'Jersey Club' | 'Scene' | 'Breakcore' | 'Hyperpop' | 'FX';
+export const GENRES: Genre[] = ['EDM', 'Rave', 'Techno', 'Hardstyle', 'Jersey Club', 'Scene', 'Breakcore', 'Hyperpop', 'FX'];
 
 export interface LoopDef {
   id: string;
@@ -539,6 +539,383 @@ export const LOOPS: LoopDef[] = [
         c.L[i] = crush(softClip(c.L[i], 1.5), 6);
         c.R[i] = crush(softClip(c.R[i], 1.5), 6);
       }
+    },
+  },
+
+  // ---------------------------------------------------------------- more loops per genre
+  {
+    id: 'edm-house-groove',
+    name: 'House Groove',
+    genre: 'EDM',
+    kind: 'drums',
+    bpm: 124,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      const st = s16(bpm);
+      pattern('x...x...x...x...', st, 4, (t) => kick(c, t, { f0: 150, f1: 48, decay: 0.24, drive: 1.6 }));
+      pattern('....x.......x...', st, 4, (t, _a, i) => clap(c, t, 700 + i, 0.6));
+      pattern('..x...x...x...x.', st, 4, (t, _a, i) => hat(c, t, 710 + i, { decay: 0.16, gain: 0.28 }));
+      pattern('x.xxx.xxx.xxx.xx', st, 4, (t, _a, i) => hat(c, t, 720 + i, { decay: 0.02, gain: 0.1, pan: Math.sin(i) * 0.5 }));
+    },
+  },
+  {
+    id: 'edm-big-room-lead',
+    key: 'Em',
+    name: 'Big Room Lead',
+    genre: 'EDM',
+    kind: 'synth',
+    bpm: 128,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      const st = s16(bpm);
+      // E minor off-beat hook (E G B G / E G D B)
+      const riff = [52, 55, 59, 55, 52, 55, 62, 59];
+      const notes: SynthNote[] = [];
+      for (let i = 0; i < 32; i++) notes.push({ t: (4 * i + 2) * st, dur: st * 1.6, note: riff[i % 8] });
+      synth(c, notes, { wave: 'square', cutoff: 1800, envMod: 2500, envDecay: 0.08, res: 0.8, gain: 0.35, drive: 1.6, width: 0.5 });
+      pattern('..x...x...x...x.', st, 4, (t, _a, i) => hat(c, t, 690 + i, { decay: 0.06, gain: 0.3 }));
+      synth(c, [0, 4, 8, 12].map((b) => ({ t: b * 4 * st, dur: st * 15, note: 40 })), { wave: 'saw', cutoff: 300, gain: 0.45 });
+      pattern('x...x...x...x...', st, 4, (t) => kick(c, t, { f0: 200, f1: 50, decay: 0.3, drive: 2.5, gain: 0.9 }));
+    },
+  },
+  {
+    id: 'rave-jungle-break',
+    name: 'Jungle Break',
+    genre: 'Rave',
+    kind: 'drums',
+    bpm: 170,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      const st = s16(bpm);
+      pattern('x.x.......xx....x.x.......x.....', st, 4, (t) => kick(c, t, { f0: 130, f1: 52, decay: 0.15, drive: 1.3 }));
+      pattern('....o..x.x..o.......o..x.x..o..x', st, 4, (t, a, i) => snare(c, t, 730 + i, { gain: a ? 0.85 : 0.45, tone: 230 }));
+      pattern('x.x.x.x.x.x.x.x.', st, 4, (t, _a, i) => hat(c, t, 740 + i, { decay: 0.03, gain: 0.22 }));
+    },
+  },
+  {
+    id: 'rave-trance-gate',
+    key: 'Am',
+    name: 'Trance Gate Chords',
+    genre: 'Rave',
+    kind: 'synth',
+    bpm: 138,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      // Am – Am – F – G, gated on 16ths
+      const steps = [0, 2, 4, 6, 8, 10, 12, 14];
+      const notes = chordStabs([[57, MINOR], [57, MINOR], [53, MAJOR], [55, MAJOR]], steps, bpm, 0.8);
+      synth(c, notes, { wave: 'supersaw', cutoff: 3000, envMod: 2000, envDecay: 0.06, res: 0.6, detune: 18, gain: 0.45, width: 0.9 });
+      synth(c, [0, 1, 2, 3].map((b) => ({ t: (b * 16 * 60) / bpm / 4, dur: (15 * 60) / bpm / 4, note: [33, 33, 29, 31][b] })), { wave: 'saw', cutoff: 350, gain: 0.5 });
+      for (let b = 0; b < 16; b++) kick(c, (b * 60) / bpm, { f0: 160, f1: 50, decay: 0.2, drive: 1.8, gain: 0.85 });
+    },
+  },
+  {
+    id: 'techno-peak-time',
+    name: 'Peak-Time Drums',
+    genre: 'Techno',
+    kind: 'drums',
+    bpm: 132,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      const st = s16(bpm);
+      pattern('x...x...x...x...', st, 4, (t) => kick(c, t, { f0: 140, f1: 45, decay: 0.3, drive: 3, gain: 0.95 }));
+      pattern('....x.......x...', st, 4, (t, _a, i) => clap(c, t, 750 + i, 0.5));
+      pattern('..x...x...x...x.', st, 4, (t, _a, i) => cymbal(c, t, 760 + i, 0.25, 0.12));
+      pattern('xxxxxxxxxxxxxxxx', st, 4, (t, _a, i) => hat(c, t, 770 + i, { decay: 0.012, gain: i % 4 === 2 ? 0.2 : 0.08 }));
+    },
+  },
+  {
+    id: 'techno-dark-stab',
+    key: 'Fm',
+    name: 'Dark Stab',
+    genre: 'Techno',
+    kind: 'synth',
+    bpm: 130,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      const notes = chordStabs([[53, MINOR], [53, MINOR], [53, MINOR], [56, MAJOR]], [2, 6, 10, 13], bpm, 1);
+      synth(c, notes, { wave: 'saw', cutoff: 900, envMod: 2200, envDecay: 0.07, res: 1.4, gain: 0.5, drive: 1.4, width: 0.6 });
+      synth(c, [0, 1, 2, 3].map((b) => ({ t: (b * 16 * 60) / bpm / 4, dur: (15 * 60) / bpm / 4, note: 29 })), { wave: 'sine', cutoff: 200, gain: 0.5 });
+      for (let b = 0; b < 16; b++) kick(c, (b * 60) / bpm, { f0: 140, f1: 45, decay: 0.25, drive: 2.5, gain: 0.85 });
+    },
+  },
+  {
+    id: 'scene-crunk-bounce',
+    name: 'Crunk Bounce',
+    genre: 'Scene',
+    kind: 'drums',
+    bpm: 140,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      const st = s16(bpm);
+      pattern('x.....x...x.....x.....x.x.x.....', st, 4, (t) => kick(c, t, { f0: 120, f1: 42, decay: 0.4, drive: 2.2 }));
+      pattern('....x.......x...', st, 4, (t, _a, i) => clap(c, t, 780 + i, 0.8));
+      pattern('x.x.x.x.x.x.x.xx', st, 4, (t, _a, i) => hat(c, t, 790 + i, { decay: 0.025, gain: 0.25 }));
+    },
+  },
+  {
+    id: 'scene-electro-bass',
+    key: 'Gm',
+    name: 'Electro Octave Bass',
+    genre: 'Scene',
+    kind: 'bass',
+    bpm: 130,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      const st = s16(bpm);
+      const line = [43, 55, 43, 55, 43, 55, 46, 58, 43, 55, 43, 55, 50, 62, 46, 58];
+      const notes: SynthNote[] = [];
+      for (let i = 0; i < 64; i++) notes.push({ t: i * st, dur: st * 0.7, note: line[i % 16] - 12 });
+      synth(c, notes, { wave: 'square', cutoff: 700, envMod: 1800, envDecay: 0.05, res: 1.1, gain: 0.55, drive: 2.2, bits: 7 });
+      // a square bass's 3rd harmonic is the fifth (D): a soft G minor chord keeps the key clear
+      synth(c, chordStabs([[55, MINOR], [55, MINOR], [55, MINOR], [55, MINOR]], [0, 8], bpm, 6), { wave: 'tri', cutoff: 2000, gain: 0.4 });
+      pattern('x...x...x...x...', st, 4, (t) => kick(c, t, { f0: 170, f1: 50, decay: 0.2, drive: 2 }));
+      pattern('....x.......x...', st, 4, (t, _a, i) => snare(c, t, 800 + i, { gain: 0.6, bright: 0.8 }));
+    },
+  },
+  {
+    id: 'breakcore-amen-shred',
+    name: 'Amen Shred',
+    genre: 'Breakcore',
+    kind: 'drums',
+    bpm: 180,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      const st = s16(bpm);
+      pattern('x.x.......x.x...x.x.......x.....', st, 4, (t) => kick(c, t, { f0: 150, f1: 50, decay: 0.12, drive: 2.5 }));
+      pattern('....o..x.x.xo.x.....o..xx.xxo.xx', st, 4, (t, a, i) => snare(c, t, 810 + i, { gain: a ? 0.9 : 0.5, tone: 250, decay: 0.08 }));
+      pattern('x.x.x.x.x.x.x.x.', st, 4, (t, _a, i) => hat(c, t, 820 + i, { decay: 0.02, gain: 0.2 }));
+      for (let i = 0; i < c.L.length; i++) {
+        c.L[i] = softClip(c.L[i], 1.8);
+        c.R[i] = softClip(c.R[i], 1.8);
+      }
+    },
+  },
+  {
+    id: 'breakcore-sad-pad',
+    key: 'Dm',
+    name: 'Sad Pad Break',
+    genre: 'Breakcore',
+    kind: 'synth',
+    bpm: 170,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      const bar = (4 * 60) / bpm;
+      // Dm – Bb – Dm – A (root-weighted pad)
+      const chords: [number, number[]][] = [[50, MINOR], [46, MAJOR], [50, MINOR], [45, MAJOR]];
+      const notes: SynthNote[] = [];
+      chords.forEach(([r, iv], b) => iv.forEach((x) => notes.push({ t: b * bar, dur: bar * 0.95, note: r + x })));
+      synth(c, notes, { wave: 'supersaw', cutoff: 1400, res: 0.5, detune: 14, gain: 0.4, attack: 0.08, release: 0.1, width: 0.9 });
+      synth(c, chords.map(([r], b) => ({ t: b * bar, dur: bar * 0.95, note: r - 12 })), { wave: 'sine', cutoff: 300, gain: 0.5 });
+      const st = s16(bpm);
+      pattern('x.........x.....x.x.......x.....', st, 4, (t) => kick(c, t, { f0: 140, f1: 50, decay: 0.12, drive: 1.6, gain: 0.7 }));
+      pattern('....x.......x.xx....x..x....x...', st, 4, (t, _a, i) => snare(c, t, 830 + i, { gain: 0.45, tone: 240 }));
+    },
+  },
+  {
+    id: 'hyperpop-sparkle-chords',
+    key: 'C',
+    name: 'Sparkle Chords',
+    genre: 'Hyperpop',
+    kind: 'synth',
+    bpm: 160,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      // C – G – Am – F, bright and detuned
+      const notes = chordStabs([[60, MAJOR], [55, MAJOR], [57, MINOR], [53, MAJOR]], [0, 3, 6, 8, 11, 14], bpm, 1.4);
+      synth(c, notes, { wave: 'supersaw', cutoff: 5000, envMod: 3000, envDecay: 0.1, res: 0.5, detune: 30, gain: 0.45, width: 1 });
+      synth(c, [0, 1, 2, 3].map((b) => ({ t: (b * 16 * 60) / bpm / 4, dur: (14 * 60) / bpm / 4, note: [36, 31, 33, 29][b] })), { wave: 'sine', cutoff: 400, gain: 0.55, drive: 1.5 });
+      const st = s16(bpm);
+      pattern('x.....x...x.....', st, 4, (t) => kick(c, t, { f0: 180, f1: 55, decay: 0.15, drive: 2 }));
+      pattern('....x.......x...', st, 4, (t, _a, i) => clap(c, t, 840 + i, 0.6));
+    },
+  },
+  {
+    id: 'hyperpop-blown-808',
+    key: 'Em',
+    name: 'Blown-Out 808',
+    genre: 'Hyperpop',
+    kind: 'bass',
+    bpm: 150,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      const st = s16(bpm);
+      const notes: SynthNote[] = [];
+      [0, 6, 10, 16, 22, 26, 32, 38, 42, 48, 54, 58].forEach((s, i) => notes.push({ t: s * st, dur: st * 5, note: i % 3 === 2 ? 43 : 40, slide: i % 3 === 2 ? 40 : undefined }));
+      synth(c, notes, { wave: 'sine', cutoff: 2000, gain: 0.8, drive: 4, glide: 0.05 });
+      pattern('x.....x...x.....', st, 4, (t) => kick(c, t, { f0: 200, f1: 60, decay: 0.08, drive: 2, gain: 0.7 }));
+      pattern('....x.......x...', st, 4, (t, _a, i) => snare(c, t, 850 + i, { gain: 0.6, bright: 1 }));
+      pattern('xxx.x.xxx.x.xx.x', st, 4, (t, _a, i) => hat(c, t, 860 + i, { decay: 0.015, gain: 0.18 }));
+    },
+  },
+
+  // ---------------------------------------------------------------- Hardstyle (150 BPM)
+  {
+    id: 'hardstyle-kick-drums',
+    name: 'Hardstyle Kick',
+    genre: 'Hardstyle',
+    kind: 'drums',
+    bpm: 150,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      const st = s16(bpm);
+      // punchy, heavily driven kick with a pitched tail
+      pattern('x...x...x...x...', st, 4, (t) => kick(c, t, { f0: 300, f1: 55, sweep: 0.02, decay: 0.32, drive: 6, click: 0.6, gain: 0.95 }));
+      pattern('....x.......x...', st, 4, (t, _a, i) => clap(c, t, 870 + i, 0.55));
+      pattern('..x...x...x...x.', st, 4, (t, _a, i) => hat(c, t, 880 + i, { decay: 0.08, gain: 0.3 }));
+    },
+  },
+  {
+    id: 'hardstyle-reverse-bass',
+    key: 'Am',
+    name: 'Reverse Bass',
+    genre: 'Hardstyle',
+    kind: 'bass',
+    bpm: 150,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      const beat = 60 / bpm;
+      // kick on the beat, a swelling ("reversed") bass note in between: the classic tok-woooh
+      const roots = [45, 45, 41, 43];
+      const notes: SynthNote[] = [];
+      for (let b = 0; b < 16; b++) notes.push({ t: (b + 0.25) * beat, dur: beat * 0.72, note: roots[b >> 2] - 12 });
+      synth(c, notes, { wave: 'saw', cutoff: 500, envMod: 0, res: 0.9, gain: 0.7, drive: 2.5, attack: beat * 0.6, release: 0.01 });
+      for (let b = 0; b < 16; b++) kick(c, b * beat, { f0: 300, f1: 55, sweep: 0.02, decay: 0.18, drive: 6, click: 0.6, gain: 0.9 });
+    },
+  },
+  {
+    id: 'hardstyle-screech-lead',
+    key: 'Am',
+    name: 'Euphoric Lead',
+    genre: 'Hardstyle',
+    kind: 'synth',
+    bpm: 150,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      const beat = 60 / bpm;
+      // A minor melody, held notes with glides
+      const mel: [number, number, number][] = [
+        [0, 2, 69], [2, 1, 72], [3, 1, 71], [4, 3, 69], [7, 1, 64], [8, 2, 65], [10, 2, 64], [12, 3, 69], [15, 1, 72],
+      ];
+      const notes = mel.map(([t, d, n], i) => ({ t: t * beat, dur: d * beat * 0.95, note: n, slide: i ? mel[i - 1][2] : undefined }));
+      synth(c, notes, { wave: 'supersaw', cutoff: 4000, res: 0.6, detune: 25, gain: 0.45, glide: 0.04, vibrato: 0.12, width: 1 });
+      synth(c, [0, 4, 8, 12].map((b, i) => ({ t: b * beat, dur: 4 * beat * 0.95, note: [45, 45, 41, 45][i] - 12 })), { wave: 'saw', cutoff: 250, gain: 0.5 });
+      for (let b = 0; b < 16; b++) kick(c, b * beat, { f0: 300, f1: 55, sweep: 0.02, decay: 0.2, drive: 6, click: 0.6, gain: 0.8 });
+    },
+  },
+  {
+    id: 'hardstyle-build',
+    name: 'Hardstyle Build',
+    genre: 'Hardstyle',
+    kind: 'build',
+    bpm: 150,
+    bars: 4,
+    steadyBeat: false,
+    render(c, bpm) {
+      const st = s16(bpm);
+      // snare roll: quarters → eighths → sixteenths, rising
+      pattern('x...x...x...x...x.x.x.x.x.x.x.x.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', st, 4, (t, _a, i) =>
+        snare(c, t, 890 + i, { gain: 0.3 + (i / 64) * 0.6, tone: 200 + i * 3 }),
+      );
+      sweep(c, 0, 16 * 4 * st, 77, { from: 300, to: 9000, gainFrom: 0.05, gainTo: 0.7, res: 3 });
+    },
+  },
+
+  // ---------------------------------------------------------------- Jersey Club (140 BPM)
+  {
+    id: 'jersey-club-kicks',
+    name: 'Jersey Club Kicks',
+    genre: 'Jersey Club',
+    kind: 'drums',
+    bpm: 140,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      const st = s16(bpm);
+      // the signature bounce: two quarter kicks, then a quick 3-kick run
+      pattern('x...x...x..x..x.', st, 4, (t) => kick(c, t, { f0: 170, f1: 50, decay: 0.18, drive: 2.2 }));
+      pattern('....x.......x...', st, 4, (t, _a, i) => clap(c, t, 900 + i, 0.75));
+      pattern('x.x.x.x.x.x.x.x.', st, 4, (t, _a, i) => hat(c, t, 910 + i, { decay: 0.02, gain: 0.18 }));
+    },
+  },
+  {
+    id: 'jersey-club-squeak',
+    name: 'Bed Squeak Bounce',
+    genre: 'Jersey Club',
+    kind: 'drums',
+    bpm: 140,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      const st = s16(bpm);
+      pattern('x...x...x..x..x.', st, 4, (t) => kick(c, t, { f0: 170, f1: 50, decay: 0.18, drive: 2.2 }));
+      // squeaks: short falling chirps on the off-steps
+      pattern('..x...x...x.x..x', st, 4, (t, _a, i) => {
+        const start = Math.round(t * c.sr);
+        const n = Math.round(0.07 * c.sr);
+        let ph = 0;
+        for (let k = 0; k < n; k++) {
+          ph += (2600 - 1400 * (k / n) + (i % 2) * 300) / c.sr;
+          const v = Math.sin(TAU * ph) * Math.sin((Math.PI * k) / n) * 0.35;
+          c.add(start + k, v * (i % 2 ? 0.7 : 1), v * (i % 2 ? 1 : 0.7));
+        }
+      });
+      pattern('....x.......x...', st, 4, (t, _a, i) => snare(c, t, 920 + i, { gain: 0.55, bright: 0.9 }));
+    },
+  },
+  {
+    id: 'jersey-club-bass',
+    key: 'Gm',
+    name: 'Jersey Club 808',
+    genre: 'Jersey Club',
+    kind: 'bass',
+    bpm: 140,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      const st = s16(bpm);
+      // the 808 follows the kick bounce
+      const roots = [43, 43, 46, 43];
+      const notes: SynthNote[] = [];
+      for (let bar = 0; bar < 4; bar++) for (const s of [0, 4, 8, 11, 14]) notes.push({ t: (bar * 16 + s) * st, dur: st * 2.6, note: roots[bar] - 12 });
+      synth(c, notes, { wave: 'sine', cutoff: 1500, gain: 0.85, drive: 2.5 });
+      // a driven 808's 3rd harmonic is the fifth (D): a soft G minor chord keeps the key clear
+      synth(c, chordStabs(roots.map((r) => [r + 12, r === 46 ? MAJOR : MINOR]), [0, 8], bpm, 6), { wave: 'tri', cutoff: 2000, gain: 0.25 });
+      pattern('x...x...x..x..x.', st, 4, (t) => kick(c, t, { f0: 180, f1: 60, decay: 0.06, drive: 1.5, gain: 0.6 }));
+      pattern('....x.......x...', st, 4, (t, _a, i) => clap(c, t, 930 + i, 0.7));
+    },
+  },
+  {
+    id: 'jersey-club-chords',
+    key: 'Cm',
+    name: 'Jersey Club Plucks',
+    genre: 'Jersey Club',
+    kind: 'synth',
+    bpm: 140,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      // Cm – Cm – Ab – Bb, plucked on the bounce
+      const notes = chordStabs([[60, MINOR], [60, MINOR], [56, MAJOR], [58, MAJOR]], [2, 6, 10, 14], bpm, 1.2);
+      synth(c, notes, { wave: 'saw', cutoff: 1200, envMod: 3000, envDecay: 0.06, res: 0.7, gain: 0.45, width: 0.7 });
+      synth(c, [0, 1, 2, 3].map((b) => ({ t: (b * 16 * 60) / bpm / 4, dur: (15 * 60) / bpm / 4, note: [36, 36, 32, 34][b] })), { wave: 'sine', cutoff: 300, gain: 0.5 });
+      const st = s16(bpm);
+      pattern('x...x...x..x..x.', st, 4, (t) => kick(c, t, { f0: 170, f1: 50, decay: 0.15, drive: 2, gain: 0.85 }));
     },
   },
 
