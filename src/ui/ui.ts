@@ -169,7 +169,8 @@ export class UI {
             <div class="artist">Deck ${i === 0 ? 'A' : 'B'}</div>
           </div>
           <div class="bpm"><span class="big mono bpm-val">—</span> <span class="muted">BPM</span>
-            <div class="muted mono bpm-orig"></div></div>
+            <div class="muted mono bpm-orig"></div>
+            <div class="bpm-tools"><button class="bpm-half" title="Halve the detected BPM">½</button><button class="bpm-double" title="Double the detected BPM">×2</button><button class="grid-here" title="Put a downbeat at the current position">GRID</button></div></div>
         </div>
         <canvas class="overview"></canvas>
         <div class="times mono"><span class="elapsed">0:00.0</span><span class="tempo-val muted"></span><span class="remain">-0:00.0</span></div>
@@ -179,17 +180,14 @@ export class UI {
           <button class="sync" title="Sync tempo and beat to the other deck">SYNC</button>
           <button class="rev" title="Reverse playback">REV</button>
           <button class="quant on" title="Quantize cues and loops to the beat grid">Q</button>
-          <button class="bpm-half" title="Halve the detected BPM">½</button>
-          <button class="bpm-double" title="Double the detected BPM">×2</button>
-          <button class="grid-here" title="Put a downbeat at the current position">GRID</button>
         </div>
         <div class="keyrow">
           <span class="label">KEY</span><span class="keychip mono" title="Key you hear now (Camelot · name)">—</span>
           <button class="key-down" title="Key down one semitone">♭</button>
           <button class="key-up" title="Key up one semitone">♯</button>
           <button class="key-reset" title="Back to the original key">0</button>
-          <button class="key-sync" title="Shift the key to match the other deck (Camelot)">KEY SYNC</button>
-          <button class="keylock" title="Key lock (master tempo): tempo changes keep the pitch">KEY LOCK</button>
+          <button class="key-sync" title="Key sync: shift the key to match the other deck (Camelot)">SYNC</button>
+          <button class="keylock" title="Key lock (master tempo): tempo changes keep the pitch">LOCK</button>
         </div>
         <div class="keyrow partsrow" title="Cut parts of the track. A frequency + stereo split, not AI stem separation: VOCAL is everything in the centre of the mids.">
           <span class="label">PARTS</span>
@@ -214,7 +212,9 @@ export class UI {
           <div class="row loops" style="margin-top:4px">
             <button class="loop-in">IN</button><button class="loop-out">OUT</button>
             <button class="reloop">RELOOP</button><button class="loop-half">½</button><button class="loop-double">×2</button>
-            <span class="label" style="margin-left:8px">JUMP</span>
+          </div>
+          <div class="row loops" style="margin-top:4px">
+            <span class="label">JUMP</span>
             <button data-jump="-16">◀16</button><button data-jump="-4">◀4</button><button data-jump="-1">◀1</button>
             <button data-jump="1">1▶</button><button data-jump="4">4▶</button><button data-jump="16">16▶</button>
           </div>

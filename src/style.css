@@ -749,12 +749,12 @@ body.platters .deck .pitch {
   min-width: 34px;
 }
 .keychip {
-  min-width: 72px;
+  min-width: 60px;
   height: var(--h);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0 8px;
+  padding: 0 6px;
   border-radius: 999px;
   font-weight: 700;
   font-size: 12px;
@@ -948,7 +948,7 @@ body.compact #mixer .fader input {
 #lib-sidebar {
   border-right: 1px solid var(--line);
   overflow-y: auto;
-  padding: 8px;
+  padding: 10px 8px 8px;
 }
 #lib-sidebar .item {
   height: 28px;
@@ -1381,4 +1381,19 @@ body.lowfx .sun::after {
 .partsrow button:not(.on) {
   text-decoration: line-through;
   opacity: 0.55;
+}
+.bpm-tools {
+  display: flex;
+  gap: 3px;
+  justify-content: flex-end;
+  margin-top: 2px;
+}
+.bpm-tools button {
+  height: 20px;
+  min-height: 0;
+  padding: 0 6px;
+  font-size: 10px;
+}
+.keyrow button {
+  padding: 0 8px;
 }
