@@ -13,6 +13,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { AUDIO_EXTENSIONS, isAudioPath, isInside, mayRead } = require('./paths.cjs');
 const { autoUpdater } = require('electron-updater');
+const { MidiBridge } = require('./midi-bridge.cjs');
 
 const ORIGIN = 'app://endodj';
 const DIST = path.join(__dirname, '..', 'dist');
@@ -172,6 +173,21 @@ ipcMain.handle('endodj:update-install', (event) => {
   if (fromOurPage(event) && update.status === 'ready') autoUpdater.quitAndInstall();
 });
 
+// ------------------------------------------------------------------ MIDI (native)
+
+const midi = new MidiBridge((channel, payload) => {
+  for (const w of BrowserWindow.getAllWindows()) w.webContents.send(channel, payload);
+});
+ipcMain.handle('endodj:midi-state', (event) => (fromOurPage(event) ? midi.state() : null));
+ipcMain.handle('endodj:midi-open', (event, name) => {
+  if (!fromOurPage(event)) return null;
+  return midi.open(typeof name === 'string' ? name : undefined);
+});
+ipcMain.on('endodj:midi-send', (event, bytes) => {
+  if (fromOurPage(event)) midi.sendOut(bytes);
+});
+app.on('before-quit', () => midi.dispose());
+
 // ------------------------------------------------------------------ window
 
 function createWindow() {
@@ -222,6 +238,8 @@ app.whenReady().then(() => {
     return isOurs(requestingOrigin) && ALLOWED_PERMISSIONS.has(permission);
   });
 
+  midi.open(undefined); // connect to the DDJ-FLX2 (or the first controller) right away
+  midi.watch();
   createWindow();
   setupUpdates();
   app.on('activate', () => {

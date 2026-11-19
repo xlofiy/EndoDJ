@@ -39,6 +39,10 @@ jobs:
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then V="${GITHUB_REF#refs/tags/v}"; else V="0.2.${{ github.run_number }}"; fi
           npm version "$V" --no-git-tag-version --allow-same-version
       - run: npm run dist
+      - name: Check the native MIDI library is in the app
+        shell: bash
+        run: |
+          ls release/*-unpacked/resources/app.asar.unpacked/node_modules/@julusian/midi/prebuilds/ | grep -E "midi-(win32|linux)-x64"
       - uses: actions/upload-artifact@v4
         with:
           name: EndoDJ-${{ runner.os }}

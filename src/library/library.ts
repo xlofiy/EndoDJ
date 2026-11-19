@@ -34,8 +34,22 @@ export interface UpdateState {
   /** installed version */
   current?: string;
 }
+export interface NativeMidiState {
+  inputs: string[];
+  outputs: string[];
+  error: string | null;
+  input: string | null;
+  output: string | null;
+}
 interface NativeAPI {
   platform: string;
+  midi: {
+    state(): Promise<NativeMidiState | null>;
+    open(name?: string): Promise<NativeMidiState | null>;
+    send(bytes: number[]): void;
+    onMessage(cb: (msg: number[]) => void): () => void;
+    onPorts(cb: (s: NativeMidiState) => void): () => void;
+  };
   updates: {
     state(): Promise<UpdateState | null>;
     check(): Promise<void>;

@@ -10,6 +10,23 @@ contextBridge.exposeInMainWorld('endodjNative', {
   /** @returns {Promise<ArrayBuffer>} */
   readFile: (path) => ipcRenderer.invoke('endodj:read-file', path),
   exists: (path) => ipcRenderer.invoke('endodj:exists', path),
+  midi: {
+    /** @returns {Promise<{inputs: string[], outputs: string[], error: string|null, input: string|null, output: string|null}>} */
+    state: () => ipcRenderer.invoke('endodj:midi-state'),
+    /** name '' = disconnect, undefined = pick the controller automatically */
+    open: (name) => ipcRenderer.invoke('endodj:midi-open', name),
+    send: (bytes) => ipcRenderer.send('endodj:midi-send', bytes),
+    onMessage: (cb) => {
+      const fn = (_e, msg) => cb(msg);
+      ipcRenderer.on('endodj:midi-message', fn);
+      return () => ipcRenderer.removeListener('endodj:midi-message', fn);
+    },
+    onPorts: (cb) => {
+      const fn = (_e, state) => cb(state);
+      ipcRenderer.on('endodj:midi-ports', fn);
+      return () => ipcRenderer.removeListener('endodj:midi-ports', fn);
+    },
+  },
   updates: {
     /** @returns {Promise<{status, version, percent, error, current}>} */
     state: () => ipcRenderer.invoke('endodj:update-state'),

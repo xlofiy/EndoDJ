@@ -100,9 +100,13 @@
         "repo": "EndoDJ",
         "releaseType": "release"
       }
+    ],
+    "asarUnpack": [
+      "node_modules/@julusian/midi/**"
     ]
   },
   "dependencies": {
+    "@julusian/midi": "3.8.1",
     "electron-updater": "6.8.12"
   }
 }
