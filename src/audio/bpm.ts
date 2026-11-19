@@ -4,8 +4,10 @@
  * Pipeline:
  *  1. Build an onset-strength envelope (half-wave rectified derivative of log energy,
  *     computed on the full band and a low band so kicks dominate).
- *  2. Autocorrelate the envelope to get a coarse tempo candidate.
- *  3. Refine the tempo with a comb score evaluated over the whole track in 0.01 BPM steps.
+ *  2. Scan all tempos in range with a *metrical* comb (beats + 8ths + 16ths must line up),
+ *     which rejects wrong ratios like 4/3 or 5/4 that plain autocorrelation falls for, then
+ *     resolve the half/double-time ambiguity.
+ *  3. Refine the tempo with a comb score evaluated over the whole track (0.005 BPM steps).
  *  4. Find the first-beat offset (phase) that best lines the grid up with onsets.
  *
  * Pure functions only (no DOM / Web Audio) so it can run in a Web Worker and in unit tests.
@@ -13,7 +15,7 @@
 
 export interface BpmOptions {
   minBpm?: number; // inclusive
-  maxBpm?: number; // exclusive
+  maxBpm?: number; // inclusive
 }
 
 export interface BeatGridResult {
@@ -127,11 +129,56 @@ export function combScore(
   return { score: best, phase: bestPhase / envRate };
 }
 
-function foldIntoRange(bpm: number, minBpm: number, maxBpm: number): number {
-  if (!(bpm > 0) || !isFinite(bpm)) return 0;
-  while (bpm < minBpm) bpm *= 2;
-  while (bpm >= maxBpm) bpm /= 2;
-  return bpm;
+/** Moving-average smoothing with the given radius (in frames). */
+export function smooth(x: Float32Array, radius: number): Float32Array {
+  const out = new Float32Array(x.length);
+  let acc = 0;
+  const w = 2 * radius + 1;
+  for (let i = -radius; i < x.length + radius; i++) {
+    const add = i + radius < x.length ? x[i + radius] : 0;
+    const sub = i - radius - 1 >= 0 ? x[i - radius - 1] : 0;
+    acc += add - sub;
+    if (i >= 0 && i < x.length) out[i] = acc / w;
+  }
+  return out;
+}
+
+/**
+ * Metrical comb score: beat-grid energy plus (weighted) energy on the 8th and 16th
+ * subdivisions, for the best phase. The true tempo's subdivisions also line up with
+ * hi-hats / ghost notes; wrong ratios (4/3, 5/4, 6/5 …) do not, so they lose.
+ */
+export function metricalScore(env: Float32Array, envRate: number, bpm: number): number {
+  const period = (60 / bpm) * envRate;
+  const sub = period / 4;
+  const steps = Math.max(1, Math.floor(period));
+  let best = -1;
+  for (let p = 0; p < steps; p++) {
+    let s0 = 0;
+    let n0 = 0;
+    let s2 = 0;
+    let n2 = 0;
+    let s4 = 0;
+    let n4 = 0;
+    let k = 0;
+    for (let idx = p; idx < env.length - 1; idx += sub, k++) {
+      const v = envAt(env, idx);
+      s4 += v;
+      n4++;
+      if (k % 2 === 0) {
+        s2 += v;
+        n2++;
+      }
+      if (k % 4 === 0) {
+        s0 += v;
+        n0++;
+      }
+    }
+    if (!n0) continue;
+    const sc = s0 / n0 + 0.5 * (s2 / n2) + 0.25 * (s4 / n4);
+    if (sc > best) best = sc;
+  }
+  return best;
 }
 
 export function detectBeatGrid(
@@ -145,53 +192,44 @@ export function detectBeatGrid(
   const { env, envRate } = onsetEnvelope(mono, sampleRate);
   if (env.length < envRate * 2) return { bpm: 0, firstBeat: 0, confidence: 0 };
 
-  // --- 1. coarse autocorrelation (on at most 90 s from the middle of the track) ---
-  const maxLen = Math.round(envRate * 90);
-  const start = env.length > maxLen ? Math.floor((env.length - maxLen) / 2) : 0;
-  const seg = env.subarray(start, start + Math.min(maxLen, env.length));
-  const minLag = Math.floor((60 / 220) * envRate);
-  const maxLag = Math.ceil((60 / 50) * envRate);
-  const ac = new Float32Array(maxLag + 2);
-  for (let lag = minLag; lag <= maxLag + 1 && lag < seg.length; lag++) {
-    let s = 0;
-    for (let i = 0; i + lag < seg.length; i++) s += seg[i] * seg[i + lag];
-    ac[lag] = s / (seg.length - lag);
-  }
-  // harmonic-enhanced score: a true beat period also correlates at 2x and 4x the lag
-  let bestLag = 0;
-  let bestScore = -Infinity;
-  for (let lag = minLag; lag <= maxLag; lag++) {
-    const bpm = (60 * envRate) / lag;
-    if (bpm < 50 || bpm > 220) continue;
-    const s =
-      ac[lag] +
-      0.5 * (2 * lag <= maxLag + 1 ? ac[2 * lag] : 0) +
-      0.25 * (4 * lag <= maxLag + 1 ? ac[4 * lag] : 0);
-    if (s > bestScore) {
-      bestScore = s;
-      bestLag = lag;
+  // --- 1. coarse tempo scan with a metrical comb ---
+  // Scanned in 0.25-BPM steps on up to three 10-s windows spread over the track. Short
+  // windows keep the grid drift between scan steps small (< 10 ms), several windows keep
+  // the estimate robust against breakdowns and intros.
+  const winLen = Math.round(envRate * 10);
+  const windows: Float32Array[] = [];
+  if (env.length <= winLen * 1.5) windows.push(smooth(env, 2));
+  else {
+    const count = Math.min(3, Math.floor(env.length / winLen));
+    for (let w = 0; w < count; w++) {
+      const centre = ((w + 1) / (count + 1)) * env.length;
+      const from = Math.max(0, Math.min(env.length - winLen, Math.round(centre - winLen / 2)));
+      windows.push(smooth(env.subarray(from, from + winLen), 2));
     }
   }
-  if (bestLag === 0) return { bpm: 0, firstBeat: 0, confidence: 0 };
-  let coarse = foldIntoRange((60 * envRate) / bestLag, minBpm, maxBpm);
-
-  // --- 2. pick between octave candidates with the comb score ---
-  const candidates = [coarse, coarse * 2, coarse / 2, coarse * 1.5, coarse / 1.5].filter(
-    (b) => b >= minBpm && b < maxBpm,
-  );
-  let bestCand = coarse;
-  let bestCandScore = -1;
-  for (const c of candidates) {
-    // slight preference for the autocorrelation winner
-    const s = combScore(env, envRate, c).score * (c === coarse ? 1.05 : 1);
-    if (s > bestCandScore) {
-      bestCandScore = s;
-      bestCand = c;
+  const sumScore = (fn: (e: Float32Array) => number) => windows.reduce((acc, w) => acc + fn(w), 0);
+  let coarse = 0;
+  let coarseScore = -1;
+  for (let b = minBpm; b <= maxBpm + 1e-9; b += 0.25) {
+    const sc = sumScore((w) => metricalScore(w, envRate, b));
+    if (sc > coarseScore) {
+      coarseScore = sc;
+      coarse = b;
     }
   }
-  coarse = bestCand;
+  if (coarse === 0) return { bpm: 0, firstBeat: 0, confidence: 0 };
+  // Octave decision: the metrical score cannot tell T from T/2 when every beat has a hit.
+  // If the positions halfway between beats carry ≥ 60 % of the beats' energy, they are beats
+  // (e.g. DnB reads 174, not 87; a 90 BPM groove with 8th-note hats stays 90 — see tests).
+  while (coarse * 2 <= maxBpm) {
+    const c = coarse;
+    const here = sumScore((w) => combScore(w, envRate, c).score);
+    const dbl = sumScore((w) => combScore(w, envRate, c * 2).score);
+    if (dbl >= 0.6 * here) coarse *= 2;
+    else break;
+  }
 
-  // --- 3. fine search ±2 BPM in 0.05 steps, then ±0.06 in 0.01 steps ---
+  // --- 2. fine search on the whole track: ±0.3 BPM in 0.02 steps, then ±0.03 in 0.005 ---
   const search = (center: number, span: number, step: number): number => {
     let b = center;
     let bs = -1;
@@ -205,8 +243,8 @@ export function detectBeatGrid(
     }
     return b;
   };
-  let bpm = search(coarse, 2, 0.05);
-  bpm = search(bpm, 0.06, 0.01);
+  let bpm = search(coarse, 0.3, 0.02);
+  bpm = search(bpm, 0.03, 0.005);
 
   // snap to an integer BPM if it scores (practically) as well — most dance music is integer BPM
   // (within 0.05 BPM the grid drifts by only a few ms over a whole track, below comb resolution)
@@ -218,7 +256,7 @@ export function detectBeatGrid(
   }
   bpm = Math.round(bpm * 100) / 100;
 
-  // --- 4. phase ---
+  // --- 3. phase ---
   const { score, phase } = combScore(env, envRate, bpm);
   let mean = 0;
   for (let i = 0; i < env.length; i++) mean += env[i];

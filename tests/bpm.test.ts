@@ -63,6 +63,29 @@ describe('detectBeatGrid', () => {
     }
   });
 
+  it('does not double a 90 BPM boom-bap groove with 8th-note hats', () => {
+    const bpm = 90;
+    const n = 40 * SR;
+    const x = new Float32Array(n);
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 0xffffffff - 0.5);
+    const beat = 60 / bpm;
+    for (let b = 0; b * beat < 39; b++) {
+      const t = 0.2 + b * beat;
+      const i0 = Math.round(t * SR);
+      const isSnare = b % 2 === 1;
+      for (let k = 0; k < SR * 0.2 && i0 + k < n; k++) {
+        const e = Math.exp(-k / (SR * (isSnare ? 0.05 : 0.06)));
+        x[i0 + k] += isSnare ? 0.5 * e * rnd() * 2 : 0.8 * e * Math.sin((2 * Math.PI * 55 * k) / SR);
+      }
+      for (const off of [0, 0.5]) {
+        const h0 = Math.round((t + off * beat) * SR);
+        for (let k = 0; k < SR * 0.03 && h0 + k < n; k++) x[h0 + k] += 0.15 * Math.exp(-k / (SR * 0.006)) * rnd();
+      }
+    }
+    expect(detectBeatGrid([x], SR).bpm).toBe(90);
+  });
+
   it('returns 0 for very short audio', () => {
     expect(detectBeatGrid([new Float32Array(1000)], SR).bpm).toBe(0);
   });
