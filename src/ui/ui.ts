@@ -1,6 +1,6 @@
 /** DOM user interface. Plain TypeScript, no framework. */
 import type { App } from '../app/app';
-import { BEATJUMP_PAD_SIZES, BEATLOOP_PAD_SIZES, PADFX } from '../app/app';
+import { BEATJUMP_PAD_SIZES, BEATLOOP_PAD_SIZES, DECK_FX_NAMES, PADFX, type DeckFx } from '../app/app';
 import { evaluate, FLX2_TEST_STEPS, testReport, type StepResult } from '../midi/controller-test';
 import { HOTCUE_COUNT, TEMPO_RANGES, type Deck } from '../audio/deck';
 import { camelot, camelotNumber, keyName } from '../audio/key';
@@ -438,7 +438,8 @@ export class UI {
         }
         case 'padfx': {
           const [type, beats] = PADFX[p];
-          label = `${EFFECT_TYPES.find((t) => t.id === type)?.name.split(' ')[0]} ${fmtBeats(beats)}`;
+          const name = type in DECK_FX_NAMES ? DECK_FX_NAMES[type as DeckFx] : EFFECT_TYPES.find((t) => t.id === type)?.name.split(' ')[0];
+          label = `${name} ${fmtBeats(beats)}`;
           break;
         }
         case 'beatloop':

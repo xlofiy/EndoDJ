@@ -287,7 +287,64 @@ export class Deck {
   pause(): void {
     this.send({ type: 'pause' });
     this.status = { ...this.status, playing: false };
+    this.stopSpin();
     this.emit();
+  }
+
+  // ------------------------------------------------------------------ deck effects
+
+  private spinTimer: number | null = null;
+
+  /**
+   * Brake / backspin: the platter runs at `rate` (1 = normal, negative = backwards) and slows
+   * to a stop over `seconds`, then the deck pauses. Uses the scratch path, so it sounds like vinyl.
+   */
+  spinDown(rate: number, seconds: number): void {
+    if (!this.playing || this.jogTouched) return;
+    this.stopSpin();
+    const t0 = performance.now();
+    const step = () => {
+      const p = (performance.now() - t0) / 1000 / Math.max(0.05, seconds);
+      if (p >= 1) this.pause();
+      else this.send({ type: 'scratch', active: true, rate: rate * (1 - p) });
+    };
+    this.spinTimer = window.setInterval(step, 10);
+    step();
+  }
+
+  brake(seconds: number): void {
+    this.spinDown(this.tempoFactor * (this.reverse ? -1 : 1), seconds);
+  }
+
+  backspin(seconds: number): void {
+    this.spinDown(-3, seconds);
+  }
+
+  private stopSpin(): void {
+    if (this.spinTimer === null) return;
+    clearInterval(this.spinTimer);
+    this.spinTimer = null;
+    this.send({ type: 'scratch', active: false, rate: 0 });
+  }
+
+  private rollFrom: { time: number; at: number } | null = null;
+
+  /**
+   * Beat roll: loop `beats` while held (`null` = released). On release the track carries on where
+   * it would have been without the roll (slip), so the mix stays on the beat.
+   */
+  roll(beats: number | null): void {
+    if (beats !== null) {
+      if (!this.playing) return;
+      this.rollFrom ??= { time: this.time, at: performance.now() };
+      if (!(this.loopActive && this.loop?.beats === beats)) this.beatloop(beats);
+      return;
+    }
+    if (!this.rollFrom) return;
+    const { time, at } = this.rollFrom;
+    this.rollFrom = null;
+    this.exitLoop();
+    this.seek(time + ((performance.now() - at) / 1000) * this.tempoFactor);
   }
 
   togglePlay(): void {
@@ -484,6 +541,7 @@ export class Deck {
   jogTouch(down: boolean): void {
     this.jogTouched = down;
     if (down) {
+      this.stopSpin(); // grabbing the platter stops a brake / backspin
       this.scratchTicks = 0;
       this.scratchRate = 0;
       this.scratchLast = performance.now();

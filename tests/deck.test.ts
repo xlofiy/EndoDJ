@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DeckCommand } from '../src/audio/deck-processor';
 import { parseKey } from '../src/audio/key';
 
@@ -114,5 +114,53 @@ describe('Deck transport', () => {
     // without a key on one side there is nothing to sync
     b.setKey(null);
     expect(b.keySyncTo(a)).toBe(false);
+  });
+});
+
+describe('deck effects', () => {
+  (globalThis as unknown as { window: unknown }).window ??= globalThis;
+  const scratches = () => sent.filter((m) => m.type === 'scratch') as Extract<DeckCommand, { type: 'scratch' }>[];
+
+  it('brake slows the platter to a stop, then pauses', () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'performance'] });
+    const d = loaded();
+    d.play();
+    d.brake(1);
+    expect(scratches()[0]).toEqual({ type: 'scratch', active: true, rate: 1 });
+    vi.advanceTimersByTime(500);
+    expect(scratches().at(-1)!.rate).toBeCloseTo(0.5, 1);
+    vi.advanceTimersByTime(600);
+    expect(d.playing).toBe(false);
+    expect(sent.at(-1)).toEqual({ type: 'scratch', active: false, rate: 0 });
+    vi.useRealTimers();
+  });
+
+  it('backspin runs backwards and stops when the platter is grabbed', () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'performance'] });
+    const d = loaded();
+    d.play();
+    d.backspin(2);
+    expect(scratches()[0].rate).toBe(-3);
+    d.jogTouch(true);
+    const n = scratches().length;
+    vi.advanceTimersByTime(500);
+    expect(scratches().filter((m) => m.rate < 0).length).toBe(n - 2); // no more spin steps after the grab
+    d.jogTouch(false);
+    vi.useRealTimers();
+  });
+
+  it('beat roll loops while held and slips back to where the track would be', () => {
+    vi.useFakeTimers({ toFake: ['performance'] });
+    const d = loaded();
+    d.seek(10.2);
+    d.play();
+    d.roll(1);
+    expect(d.loop).toMatchObject({ start: 10, end: 10.5 });
+    expect(d.loopActive).toBe(true);
+    vi.advanceTimersByTime(2000);
+    d.roll(null);
+    expect(d.loopActive).toBe(false);
+    expect(d.time).toBeCloseTo(12.2, 2);
+    vi.useRealTimers();
   });
 });

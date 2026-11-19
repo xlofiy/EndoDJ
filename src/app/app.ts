@@ -21,16 +21,19 @@ import { LOOP_PREFIX } from './suggest';
 
 export const BEATLOOP_PAD_SIZES = [0.25, 0.5, 1, 2, 4, 8, 16, 32];
 export const BEATJUMP_PAD_SIZES = [-1, 1, -2, 2, -4, 4, -8, 8];
-/** Pad FX mode: effect + beat length per pad */
-export const PADFX: [EffectType, number][] = [
+/** deck effects (they act on the deck's playback, not on its sound) */
+export type DeckFx = 'roll' | 'brake' | 'backspin';
+export const DECK_FX_NAMES: Record<DeckFx, string> = { roll: 'Roll', brake: 'Brake', backspin: 'Backspin' };
+/** Pad FX mode: effect + beat length per pad (all other effects are in the FX unit) */
+export const PADFX: [EffectType | DeckFx, number][] = [
   ['echo', 0.5],
-  ['echo', 1],
+  ['pingpong', 0.75],
   ['reverb', 1],
   ['flanger', 2],
-  ['phaser', 2],
-  ['trans', 0.25],
-  ['trans', 0.5],
-  ['bitcrusher', 1],
+  ['roll', 0.5],
+  ['roll', 0.25],
+  ['brake', 2],
+  ['backspin', 2],
 ];
 
 export class App {
@@ -308,9 +311,19 @@ export class App {
   private padFxSaved: { type: EffectType; target: FxTarget; beats: number; enabled: boolean; pad: number } | null = null;
 
   /** Pad FX (FLX2 pad mode): hold a pad for an effect on that deck; release restores your FX settings. */
+  private padRoll: { deck: Deck; pad: number } | null = null;
+
   private padFxDown(deckIndex: number, pad: number): void {
     const fx = this.engine.fx;
     const [type, beats] = PADFX[pad] ?? PADFX[0];
+    const deck = this.engine.decks[deckIndex];
+    const beatSec = deck.effectiveBpm > 0 ? 60 / deck.effectiveBpm : 0.5;
+    if (type === 'brake') return deck.brake(beats * beatSec);
+    if (type === 'backspin') return deck.backspin(beats * beatSec);
+    if (type === 'roll') {
+      this.padRoll = { deck, pad };
+      return deck.roll(beats);
+    }
     if (!this.padFxSaved) this.padFxSaved = { type: fx.type, target: fx.target, beats: fx.beats, enabled: fx.enabled, pad };
     this.padFxSaved.pad = pad;
     const target: FxTarget = deckIndex === 0 ? 'deck1' : 'deck2';
@@ -321,6 +334,10 @@ export class App {
   }
 
   private padFxUp(pad: number): void {
+    if (this.padRoll?.pad === pad) {
+      this.padRoll.deck.roll(null);
+      this.padRoll = null;
+    }
     const saved = this.padFxSaved;
     if (!saved || saved.pad !== pad) return;
     this.padFxSaved = null;

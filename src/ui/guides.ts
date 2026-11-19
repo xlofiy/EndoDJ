@@ -386,10 +386,14 @@ export const GUIDES: Guide[] = [
     figure: fxSvg,
     caption: 'Effect timing follows the BPM, so repeats always land on the beat.',
     body: `<ol>
-      <li>Pick an effect: echo, reverb, flanger, phaser, trans (gate) or bitcrusher.</li>
+      <li>Pick an effect: echo, ping-pong echo, reverb, flanger, phaser, wah, trans (gate), tremolo, distortion,
+        bitcrusher or noise sweep.</li>
       <li>Pick where it goes: deck A, deck B or the master.</li>
       <li>Pick a beat length (1/8 to 16 beats) — the time the effect follows.</li>
       <li>Set LEVEL / DEPTH, then press <b>FX ON</b>. Echo and reverb tails ring out after you switch them off.</li>
+      <li>Pads in <b>Pad FX</b> mode play an effect while you hold them: echo, ping-pong, reverb, flanger,
+        <b>beat roll</b> (loops while held, then carries on where the track would have been),
+        <b>brake</b> (slows to a stop) and <b>backspin</b>.</li>
     </ol>`,
   },
   {
