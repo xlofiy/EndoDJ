@@ -6,35 +6,35 @@ for a 2-deck DDJ-FLX2 setup, completely free.
 Legend: `[x]` done · `[~]` partial · `[ ]` not started
 
 ## Phase 1 — Playable core (v0.1)
-- [ ] Audio engine (Web Audio) with AudioWorklet deck player (variable speed, reverse, scratch)
-- [ ] 2 decks: load, play/pause, cue (CDJ style), seek, pitch fader, pitch range, nudge
-- [ ] Waveforms: overview + zoomed scrolling waveform with beat grid
-- [ ] Auto BPM detection + beat grid (first-beat offset)
-- [ ] Sync (tempo + phase)
-- [ ] 8 hot cues / deck, persisted per track
-- [ ] Loops: auto loop (1/8–32 beats), manual in/out, halve/double, exit/reloop; beat jump
-- [ ] Mixer: trim, 3-band EQ, Color FX filter, channel fader, crossfader + curve, master volume
-- [ ] Headphone cue (PFL) with cue/master mix, output modes: stereo / split / 4-channel
-- [ ] Effects: echo, reverb, flanger, phaser, bitcrusher — beat synced, wet/dry
-- [ ] Library: add folder (File System Access API), drag & drop files, search, sort
-- [ ] Analysis cache (BPM, grid, waveform, duration) in IndexedDB
-- [ ] Playlists / setlists, history, export (TXT / M3U / CSV)
-- [ ] Automix from a playlist
-- [ ] Record mix to file
-- [ ] Web MIDI: device selection, MIDI monitor
-- [ ] DDJ-FLX2 default mapping (needs verification on real hardware — see below)
-- [ ] MIDI Learn + export/import of mappings
-- [ ] Keyboard shortcuts
+- [x] Audio engine (Web Audio) with AudioWorklet deck player (variable speed, reverse, scratch)
+- [x] 2 decks: load, play/pause, cue (CDJ style), seek, pitch fader, pitch range, nudge
+- [x] Waveforms: overview + zoomed scrolling waveform with beat grid
+- [x] Auto BPM detection + beat grid (first-beat offset)
+- [x] Sync (tempo + phase)
+- [x] 8 hot cues / deck, persisted per track
+- [x] Loops: auto loop (1/8–32 beats), manual in/out, halve/double, exit/reloop; beat jump
+- [x] Mixer: trim, 3-band EQ, Color FX filter, channel fader, crossfader + curve, master volume
+- [~] Headphone cue (PFL) with cue/master mix, output modes: stereo / split / 4-channel (built; 4-channel needs testing on the FLX2's sound card)
+- [x] Effects: echo, reverb, flanger, phaser, trans (gate), bitcrusher — beat synced, wet/dry
+- [x] Library: add folder (File System Access API), drag & drop files, search, sort
+- [x] Analysis cache (BPM, grid, cues, duration) in IndexedDB — waveforms are recomputed on load (fast)
+- [x] Playlists / setlists, history, export (TXT / M3U / CSV)
+- [x] Automix from a playlist
+- [x] Record mix to file
+- [x] Web MIDI: device selection, MIDI monitor
+- [~] DDJ-FLX2 default mapping (written, **needs verification on real hardware** — see below)
+- [x] MIDI Learn + export/import of mappings
+- [x] Keyboard shortcuts
 
 ## Phase 2 — Pro features
 - [ ] Key detection (Camelot notation) + harmonic-mix hints
 - [ ] Key lock / master tempo (pitch-preserving time-stretch, WSOLA in the worklet)
-- [ ] Sampler (pads mode) with user-loadable samples
+- [x] Sampler (pads mode) with user-loadable samples
 - [ ] Slicer / beat roll / pad FX
-- [ ] Quantize for cues & loops
-- [ ] Controller LED feedback (play/cue/sync/hot-cue LEDs)
+- [x] Quantize for cues & loops
+- [~] Controller LED feedback (play/cue/sync/hot-cue LEDs) — implemented, unverified on hardware
 - [ ] Desktop packaging (Electron or Tauri) with native file access and audio device routing
-- [ ] Waveform colouring by frequency band
+- [x] Waveform colouring by frequency band (bass = warm, highs = cool)
 - [ ] Track metadata reading (ID3 / MP4 tags, artwork)
 
 ## Phase 3 — Beyond
