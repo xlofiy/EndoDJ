@@ -15,7 +15,10 @@ pull request and every version tag:
 Where to download:
 - **Releases** (for tagged versions such as `v0.2.0`): the repository's *Releases* page.
 - **Latest development build**: repository → *Actions* → *Desktop installers* → newest run →
-  *Artifacts* (`EndoDJ-Windows`, `EndoDJ-macOS`, `EndoDJ-Linux`). You must be signed in to GitHub.
+  *Artifacts* (`EndoDJ-Windows`, `EndoDJ-Linux`). You must be signed in to GitHub.
+- **macOS** builds run for version tags and manual runs (*Actions* → *Desktop installers* →
+  *Run workflow*). They need GitHub-hosted macOS runners to be available to the repository
+  (Settings → Billing); so far the macOS jobs were never assigned a runner.
 
 ### "Unknown publisher" warnings
 The installers are **not code-signed yet** (signing certificates cost money). Your system will warn you once:
