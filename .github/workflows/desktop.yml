@@ -1,7 +1,7 @@
 name: Desktop installers
 # Builds the EndoDJ desktop app for Windows (.exe installer) and Linux (.AppImage / .deb).
 # - Pull requests: installers as run artifacts, for testing.
-# - Every push to main (and version tags): a GitHub Release. Installed apps auto-update from the
+# - Every push to main, version tags and manual runs (Actions → Run workflow): a GitHub Release. Installed apps auto-update from the
 #   latest Release (electron-updater reads latest.yml / latest-linux.yml from it).
 on:
   workflow_dispatch:
@@ -33,7 +33,7 @@ jobs:
       - run: npm test
       - name: Set release version
         # each release needs a higher version than the last so installed apps see it as an update
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then V="${GITHUB_REF#refs/tags/v}"; else V="0.2.${{ github.run_number }}"; fi
@@ -56,7 +56,7 @@ jobs:
 
   release:
     # publish whatever installers were built, even if one platform failed
-    if: ${{ !cancelled() && github.event_name == 'push' }}
+    if: ${{ !cancelled() && github.event_name != 'pull_request' }}
     needs: build
     runs-on: ubuntu-latest
     permissions:
