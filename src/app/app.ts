@@ -14,6 +14,7 @@ import { Automix } from './automix';
 import { LoopLab } from '../loops/looplab';
 import { withNameHint } from '../loops/catalog';
 import { parseKey } from '../audio/key';
+import { extractArtwork, type Artwork } from '../library/artwork';
 import { Sampler } from './sampler';
 
 export const BEATLOOP_PAD_SIZES = [0.25, 0.5, 1, 2, 4, 8, 16, 32];
@@ -90,9 +91,16 @@ export class App {
   }
 
   async decode(trackId: string): Promise<AudioBuffer> {
+    return (await this.decodeWithArt(trackId)).buffer;
+  }
+
+  /** Decode a track and pull out its embedded cover art (read before decoding detaches the bytes). */
+  async decodeWithArt(trackId: string): Promise<{ buffer: AudioBuffer; art: Artwork | null }> {
     const file = await this.library.getFile(trackId);
     const data = await file.arrayBuffer();
-    return this.engine.ctx.decodeAudioData(data);
+    const found = extractArtwork(new Uint8Array(data));
+    const art = found ? { mime: found.mime, data: found.data.slice() } : null;
+    return { buffer: await this.engine.ctx.decodeAudioData(data), art };
   }
 
   async loadTrack(deckIndex: number, trackId: string, opts: { force?: boolean } = {}): Promise<boolean> {
@@ -105,8 +113,9 @@ export class App {
     }
     const seq = ++this.loadSeq[deckIndex];
     let buffer: AudioBuffer;
+    let art: Artwork | null;
     try {
-      buffer = await this.decode(trackId);
+      ({ buffer, art } = await this.decodeWithArt(trackId));
     } catch (e) {
       this.toast(`Could not load "${rec.title}": ${(e as Error).message}`, true);
       return false;
@@ -121,6 +130,12 @@ export class App {
       hotcues: rec.hotcues,
     });
     this.loggedPlay[deckIndex] = null;
+    if (art) {
+      void coverBitmap(art).then((bmp) => {
+        if (seq === this.loadSeq[deckIndex]) deck.setArtwork(bmp);
+        else bmp?.close();
+      });
+    }
     if (rec.bpm > 0) deck.setAnalysis({ bpm: rec.bpm, firstBeat: rec.firstBeat }, null);
     const keyKnown = rec.key !== undefined;
     if (keyKnown) deck.setKey(parseKey(rec.key));
@@ -414,3 +429,20 @@ export class App {
   }
 }
 
+
+/** Cover art → centre-cropped 256 px square bitmap (small, so drawing it every frame is cheap). */
+async function coverBitmap(art: Artwork): Promise<ImageBitmap | null> {
+  try {
+    const full = await createImageBitmap(new Blob([art.data as Uint8Array<ArrayBuffer>], { type: art.mime }));
+    const side = Math.min(full.width, full.height);
+    const square = await createImageBitmap(full, (full.width - side) / 2, (full.height - side) / 2, side, side, {
+      resizeWidth: 256,
+      resizeHeight: 256,
+      resizeQuality: 'high',
+    });
+    full.close();
+    return square;
+  } catch {
+    return null; // corrupt or unsupported image: just no artwork
+  }
+}

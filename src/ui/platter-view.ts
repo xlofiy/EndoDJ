@@ -63,7 +63,7 @@ export class PlatterView {
     const resized = fitCanvas(canvas);
     const t = deck.time;
     const key = deck.effectiveKey;
-    const sig = `${t.toFixed(3)}|${deck.effectiveBpm.toFixed(2)}|${deck.tempoFactor.toFixed(4)}|${deck.hotcues.join(',')}|${deck.track?.id}|${deck.loopActive}|${key ? camelot(key) : ''}`;
+    const sig = `${t.toFixed(3)}|${deck.effectiveBpm.toFixed(2)}|${deck.tempoFactor.toFixed(4)}|${deck.hotcues.join(',')}|${deck.track?.id}|${deck.loopActive}|${key ? camelot(key) : ''}|${deck.artwork ? 1 : 0}`;
     if (!resized && sig === this.last) return;
     this.last = sig;
 
@@ -112,6 +112,23 @@ export class PlatterView {
 
     // spinning marker (follows the track position, so it scratches with the audio)
     const angle = -Math.PI / 2 + t * REV_PER_SEC * Math.PI * 2;
+
+    // cover art spins with the platter like a record label; darkened so the read-out stays legible
+    if (deck.artwork) {
+      const r = R * 0.76;
+      g.save();
+      g.beginPath();
+      g.arc(cx, cy, r, 0, Math.PI * 2);
+      g.clip();
+      g.translate(cx, cy);
+      g.rotate(angle + Math.PI / 2);
+      g.drawImage(deck.artwork, -r, -r, r * 2, r * 2);
+      g.restore();
+      g.fillStyle = 'rgba(2, 12, 26, 0.5)';
+      g.beginPath();
+      g.arc(cx, cy, r, 0, Math.PI * 2);
+      g.fill();
+    }
     g.strokeStyle = '#ffffff';
     g.lineWidth = Math.max(2, R * 0.035);
     g.lineCap = 'round';
@@ -133,7 +150,7 @@ export class PlatterView {
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     g.fillStyle = '#ffffff';
-    g.font = `italic 800 ${Math.round(R * 0.3)}px system-ui, sans-serif`;
+    g.font = `700 ${Math.round(R * 0.3)}px 'Segoe UI', system-ui, sans-serif`;
     g.fillText(deck.grid ? deck.effectiveBpm.toFixed(1) : '—', cx, cy - R * 0.3);
     g.font = `${Math.round(R * 0.12)}px system-ui, sans-serif`;
     g.fillStyle = 'rgba(234,246,255,0.7)';

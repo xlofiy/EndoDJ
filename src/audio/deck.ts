@@ -45,6 +45,8 @@ export class Deck {
   reverse = false;
   /** detected key of the loaded track (null = unknown / unpitched) */
   key: MusicalKey | null = null;
+  /** embedded cover art (square, small), shown on the platter */
+  artwork: ImageBitmap | null = null;
   /** key shift in semitones, independent of tempo */
   keyShift = 0;
   /** master tempo: tempo changes keep the pitch */
@@ -134,6 +136,8 @@ export class Deck {
     this.synced = false;
     this.key = null;
     this.keyShift = 0;
+    this.artwork?.close();
+    this.artwork = null;
     this.sendKey();
     const channels: Float32Array[] = [];
     for (let c = 0; c < Math.min(2, buffer.numberOfChannels); c++) channels.push(buffer.getChannelData(c).slice());
@@ -150,7 +154,14 @@ export class Deck {
     this.emit();
   }
 
+  setArtwork(art: ImageBitmap | null): void {
+    this.artwork?.close();
+    this.artwork = art;
+    this.emit();
+  }
+
   unload(): void {
+    this.setArtwork(null);
     this.send({ type: 'unload' });
     this.track = null;
     this.audio = null;
