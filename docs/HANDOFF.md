@@ -69,11 +69,22 @@ FX → history → automix crossfade), with no console errors:
   crossfader curves are generated from `key.ts` / `mixmath.ts`. "Show me" closes Settings and
   highlights the control (`.spotlight`). Settings now has General / Audio / Guides tabs.
 
+## DDJ-FLX2 facts (from the official manual DRI1917A, downloaded from downloads.support.alphatheta.com)
+- Per deck: jog (top = scratch, outer = bend, SHIFT + top = search), 8 pads, SHIFT, CUE (SHIFT = start),
+  PLAY/PAUSE, BEAT SYNC (SHIFT + BEAT SYNC → pads 1-4 pick Hot Cue / Pad FX / Beat Loop / Sampler), TEMPO.
+- Mixer: MASTER CUE, EQ HI/MID/LOW, CFX, headphone CUE, channel faders, SMART FADER, crossfader. Master and
+  headphone levels are analog. No trim, loop buttons, browse/LOAD or Beat FX section.
+- Audio: built-in interface, 44.1/48 kHz, separate MASTER and PHONES outputs (rekordbox shows
+  "DDJ-FLX2 : MASTER" / "DDJ-FLX2 : PHONES").
+- The "List of MIDI Messages" is a separate document on support.alphatheta.com, which blocks automated
+  access — MIDI numbers in `src/midi/ddj-flx2.ts` are still the Pioneer-family pattern. **Run Controller →
+  Test controller with the hardware and paste the report into a session** to finalise them.
+
 ## ⚠️ Hardware verification checklist (needs the real DDJ-FLX2)
 Nothing below has been tested on the physical controller yet:
-1. **MIDI mapping** (`src/midi/ddj-flx2.ts`) — based on Pioneer's DDJ-FLX4/DDJ-400 layout.
-   Use Controller → MIDI monitor, press/move every control, fix mismatches with Learn, then
-   export the mapping and update `ddj-flx2.ts` so the defaults are right.
+1. **MIDI mapping** (`src/midi/ddj-flx2.ts`) — controls match the manual; numbers follow the Pioneer
+   family pattern. Run Controller → **Test controller**, fix mismatches in one click, then update
+   `ddj-flx2.ts` from the report (or the exported mapping) so the defaults are right.
 2. **Tempo fader direction** — toggle "invert direction" in the Controller dialog if needed.
 3. **Jog wheel resolution** — `JOG_TICKS_PER_REV` in `src/audio/deck.ts` (720 assumed).
    If scratching moves too fast/slow, adjust it.
@@ -148,3 +159,5 @@ These are the contract between MIDI, keyboard and UI (`App.handleControl`).
 - Session 3: Ponytail rules + audit fixes, key detection / shift / lock / sync, bundled CC0 loops & FX,
   Aero Scene (Vista) theme.
 - Session 4: Frutiger Aero redesign with day/night sky, platters by default, Settings tabs + Guides.
+- Session 5: cover art on platters; FLX2 mapping aligned with the official manual (Pad FX mode, sampler
+  stop, MASTER CUE; removed controls the FLX2 lacks); guided controller test with one-click fixes.

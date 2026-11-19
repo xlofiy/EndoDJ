@@ -30,16 +30,11 @@ export class Sampler {
     this.slots[slot] = { name, buffer };
   }
 
-  /** Start the sample, or stop it if it is still playing. */
+  /** Play the sample from the start (restarts it if it is already playing, like the FLX2). */
   trigger(slot: number): void {
     const s = this.slots[slot];
     if (!s) return;
-    const cur = this.playing[slot];
-    if (cur) {
-      cur.stop();
-      this.playing[slot] = null;
-      return;
-    }
+    this.stop(slot);
     const src = this.engine.ctx.createBufferSource();
     src.buffer = s.buffer;
     src.connect(this.output);
@@ -48,6 +43,14 @@ export class Sampler {
     };
     src.start();
     this.playing[slot] = src;
+  }
+
+  stop(slot: number): void {
+    const cur = this.playing[slot];
+    if (!cur) return;
+    cur.onended = null;
+    cur.stop();
+    this.playing[slot] = null;
   }
 
   isPlaying(slot: number): boolean {

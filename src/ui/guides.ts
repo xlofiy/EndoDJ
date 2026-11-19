@@ -124,7 +124,7 @@ function controllerSvg(): string {
     s += `<rect x="${fx - 6}" y="40" width="12" height="110" rx="6" fill="#061a31" stroke="${C.muted}"/><rect x="${fx - 10}" y="88" width="20" height="10" rx="3" fill="${C.amber}"/>`;
   }
   s += `<rect x="248" y="30" width="124" height="190" rx="10" fill="#0f2f52" stroke="${C.line}"/>`;
-  s += t(310, 50, 'MIXER', C.muted, 'font-size="10" font-weight="700"');
+  s += t(310, 50, 'HI · MID · LOW · CFX', C.muted, 'font-size="9" font-weight="700"');
   for (const x of [282, 338]) s += `<circle cx="${x}" cy="76" r="9" fill="none" stroke="${C.aqua}"/><circle cx="${x}" cy="102" r="9" fill="none" stroke="${C.aqua}"/><rect x="${x - 5}" y="122" width="10" height="56" rx="5" fill="#061a31" stroke="${C.muted}"/>`;
   s += `<rect x="270" y="196" width="80" height="10" rx="5" fill="#061a31" stroke="${C.muted}"/><rect x="304" y="193" width="12" height="16" rx="3" fill="${C.amber}"/>`;
   s += t(34, 168, 'TEMPO', C.muted, 'font-size="9"') + t(586, 168, 'TEMPO', C.muted, 'font-size="9"');
@@ -278,16 +278,19 @@ export const GUIDES: Guide[] = [
     title: 'Your DDJ-FLX2',
     target: '#midi-status',
     figure: controllerSvg,
-    caption: 'Schematic of a 2-channel controller. Positions are approximate — the FLX2 layout may differ.',
+    caption: 'DDJ-FLX2 layout, simplified from the official manual.',
     body: `<ul>
-      <li><b>Jog wheels</b> scratch (touch the top) and nudge (turn the outer ring). See “Platters and scratching”.</li>
-      <li><b>Tempo faders</b> work like Pioneer players: pull towards you to play faster. If yours runs the other way, tick
-        “invert direction” in the Controller window.</li>
-      <li><b>Pads</b> follow the pad mode of each deck: hot cues, beat loops, beat jump or sampler.</li>
-      <li><b>Mixer</b>: EQ knobs, filter, channel faders, crossfader, headphone cue.</li>
+      <li><b>Jog wheels</b>: touch and turn the top to scratch, turn the outer section to nudge, SHIFT + top to search.</li>
+      <li><b>TEMPO</b>: pull towards you to play faster (Pioneer style). If yours runs the other way, tick “invert
+        direction” in the Controller window.</li>
+      <li><b>8 Performance Pads</b> per deck. Choose the mode with <b>SHIFT + BEAT SYNC</b>, then pad 1 (Hot Cue), 2 (Pad FX),
+        3 (Beat Loop) or 4 (Sampler). SHIFT + pad clears a hot cue or stops a sample.</li>
+      <li><b>Mixer</b>: HI / MID / LOW, CFX (EndoDJ's filter), headphone CUE, channel faders, crossfader, MASTER CUE.
+        Master and headphone volume are the knobs on the side of the unit.</li>
+      <li>The FLX2 has no browse knob or LOAD buttons: load tracks with the mouse (A / B buttons, drag and drop).</li>
     </ul>
-    <p class="tip">The built-in mapping has not been checked on a real FLX2 yet. If a control does nothing, use MIDI Learn
-      (see “Fixing a control”).</p>`,
+    <p class="tip">First time? Open the Controller window and run <b>Test controller</b> — it checks every control and fixes
+      anything that is mapped wrong.</p>`,
   },
   {
     id: 'decks',
@@ -443,8 +446,9 @@ export const GUIDES: Guide[] = [
     caption: 'Headphone cue needs a separate output: split cable or a 4-channel sound card.',
     body: `<ul>
       <li>In <b>Audio</b> settings, choose the output device and how headphone cue is routed.</li>
-      <li><b>4 channels</b> is for sound cards with separate headphone outputs. If the FLX2 shows up with 4 outputs,
-        this is the one to use (not yet confirmed on hardware).</li>
+      <li><b>4 channels</b> is for sound cards with separate headphone outputs. The FLX2 has a MASTER output and a
+        headphones output (per the manual), so pick the FLX2 as output device and choose 4 channels. If your browser
+        shows fewer than 4 outputs for it, use Split instead.</li>
       <li>The headphone knobs in the mixer blend cue and master, and set the level.</li>
       <li><b>Rec</b> in the top bar records the master output. Press it again to save the file to your downloads.</li>
     </ul>`,
@@ -455,7 +459,9 @@ export const GUIDES: Guide[] = [
     target: '#midi-status',
     figure: midiLearnSvg,
     caption: 'Any control can be re-assigned in a few seconds.',
-    body: `<ol>
+    body: `<p><b>Quickest:</b> Controller window → <b>Test controller</b> walks through every FLX2 control and offers
+      “Use this” whenever a control sends something unexpected. To fix one control by hand:</p>
+    <ol>
       <li>Open the <b>Controller</b> window (the controller chip in the top bar) and tick “show incoming messages”.</li>
       <li>Press the control that does not work — you should see a message appear.</li>
       <li>Open “All controls”, click <b>Learn</b> next to the function you want, and press the control again.</li>

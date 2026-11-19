@@ -6,7 +6,8 @@ import AnalysisWorker from '../audio/analysis-worker.ts?worker';
 import type { AnalysisRequest, AnalysisResponse } from '../audio/analysis-worker';
 import { AudioEngine } from '../audio/engine';
 import type { Deck } from '../audio/deck';
-import { EFFECT_TYPES } from '../audio/effects';
+import { EFFECT_TYPES, type EffectType } from '../audio/effects';
+import type { FxTarget } from '../audio/engine';
 import { Library } from '../library/library';
 import { MidiController } from '../midi/midi';
 import type { ControlEvent } from '../midi/mapping';
@@ -19,6 +20,17 @@ import { Sampler } from './sampler';
 
 export const BEATLOOP_PAD_SIZES = [0.25, 0.5, 1, 2, 4, 8, 16, 32];
 export const BEATJUMP_PAD_SIZES = [-1, 1, -2, 2, -4, 4, -8, 8];
+/** Pad FX mode: effect + beat length per pad */
+export const PADFX: [EffectType, number][] = [
+  ['echo', 0.5],
+  ['echo', 1],
+  ['reverb', 1],
+  ['flanger', 2],
+  ['phaser', 2],
+  ['trans', 0.25],
+  ['trans', 0.5],
+  ['bitcrusher', 1],
+];
 
 export class App {
   engine!: AudioEngine;
@@ -262,6 +274,35 @@ export class App {
     deck.hotcues.forEach((h, i) => this.midi.setLed(`deck${n}.hotcue${i + 1}`, h !== null));
   }
 
+  /** headphone mix to return to when MASTER CUE is switched off (null = MASTER CUE off) */
+  private masterCueMix: number | null = null;
+  private padFxSaved: { type: EffectType; target: FxTarget; beats: number; enabled: boolean; pad: number } | null = null;
+
+  /** Pad FX (FLX2 pad mode): hold a pad for an effect on that deck; release restores your FX settings. */
+  private padFxDown(deckIndex: number, pad: number): void {
+    const fx = this.engine.fx;
+    const [type, beats] = PADFX[pad] ?? PADFX[0];
+    if (!this.padFxSaved) this.padFxSaved = { type: fx.type, target: fx.target, beats: fx.beats, enabled: fx.enabled, pad };
+    this.padFxSaved.pad = pad;
+    const target: FxTarget = deckIndex === 0 ? 'deck1' : 'deck2';
+    if (fx.target !== target) fx.setTarget(target);
+    if (fx.type !== type) fx.setType(type);
+    fx.setBeats(beats);
+    fx.setEnabled(true);
+  }
+
+  private padFxUp(pad: number): void {
+    const saved = this.padFxSaved;
+    if (!saved || saved.pad !== pad) return;
+    this.padFxSaved = null;
+    const fx = this.engine.fx;
+    fx.setEnabled(false);
+    if (fx.target !== saved.target) fx.setTarget(saved.target);
+    if (fx.type !== saved.type) fx.setType(saved.type);
+    fx.setBeats(saved.beats);
+    fx.setEnabled(saved.enabled);
+  }
+
   /** Load the library selection onto the deck that is not playing (BROWSE push). */
   loadSelectedToFreeDeck(): void {
     if (!this.selectedTrackId) return;
@@ -290,8 +331,13 @@ export class App {
         if (press) deck.beatloop(BEATLOOP_PAD_SIZES[num('beatloop')] ?? 4);
       } else if (action.startsWith('beatjump')) {
         if (press) deck.beatjump(BEATJUMP_PAD_SIZES[num('beatjump')] ?? 1);
+      } else if (action.startsWith('samplerStop')) {
+        if (press) this.sampler.stop(num('samplerStop'));
       } else if (action.startsWith('sampler')) {
         if (press) this.sampler.trigger(num('sampler'));
+      } else if (action.startsWith('padfx')) {
+        if (press) this.padFxDown(di, num('padfx'));
+        else if (release) this.padFxUp(num('padfx'));
       } else {
         switch (action) {
           case 'play':
@@ -412,6 +458,16 @@ export class App {
       eng.fx.updateParams();
     } else if (scope === 'mixer') {
       if (action === 'crossfader') eng.setCrossfader(e.value);
+      else if (action === 'masterCue' && press) {
+        // MASTER CUE: headphones hear the master; press again to go back to your cue/master blend
+        if (this.masterCueMix === null) {
+          this.masterCueMix = eng.headphoneMix;
+          eng.setHeadphones(1, eng.headphoneLevel);
+        } else {
+          eng.setHeadphones(this.masterCueMix, eng.headphoneLevel);
+          this.masterCueMix = null;
+        }
+      }
     } else if (scope === 'browser') {
       if (action === 'scroll') this.onBrowse?.(e.value);
       else if (action === 'push' && press) this.loadSelectedToFreeDeck();

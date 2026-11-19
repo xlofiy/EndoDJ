@@ -115,6 +115,21 @@ export class MidiMapper {
     return this.learn?.control ?? null;
   }
 
+  /**
+   * Bind `control` to the note/CC of a raw MIDI message, replacing the control's old bindings and
+   * anything else on that message. Returns null for messages that are not notes or CCs.
+   */
+  bindRaw(control: string, kind: ControlKind, data: ArrayLike<number>): MidiBinding | null {
+    const m = parseMidi(data);
+    if (m.type === 'other') return null;
+    const binding: MidiBinding = { type: m.type, channel: m.channel, number: m.number, control, kind };
+    const others = this.bindings.filter(
+      (b) => b.control !== control && !(b.type === binding.type && b.channel === binding.channel && b.number === binding.number),
+    );
+    this.setBindings([...others, binding]);
+    return binding;
+  }
+
   /** Feed a raw MIDI message; returns the resulting control events. */
   handle(data: ArrayLike<number>): ControlEvent[] {
     const m = parseMidi(data);
@@ -127,14 +142,7 @@ export class MidiMapper {
       }
       const { control, kind, done } = this.learn;
       this.learn = null;
-      const binding: MidiBinding = { type: m.type, channel: m.channel, number: m.number, control, kind };
-      const others = this.bindings.filter(
-        (b) =>
-          b.control !== control &&
-          !(b.type === binding.type && b.channel === binding.channel && b.number === binding.number),
-      );
-      this.setBindings([...others, binding]);
-      done(binding);
+      done(this.bindRaw(control, kind, data)!);
       return [];
     }
 

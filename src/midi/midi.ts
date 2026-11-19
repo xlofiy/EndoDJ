@@ -12,6 +12,8 @@ export class MidiController {
   monitor = false;
   monitorLog: string[] = [];
   onEvent: ((e: ControlEvent) => void) | null = null;
+  /** While set (controller test), messages go here instead of driving the app. */
+  onTest: ((raw: Uint8Array, events: ControlEvent[]) => void) | null = null;
   onChange: (() => void) | null = null;
   error = '';
 
@@ -122,7 +124,9 @@ export class MidiController {
       this.onChange?.();
     }
     const wasLearning = this.mapper.learning;
-    for (const ev of this.mapper.handle(data)) this.onEvent?.(ev);
+    const events = this.mapper.handle(data);
+    if (this.onTest) this.onTest(data, events);
+    else for (const ev of events) this.onEvent?.(ev);
     if (wasLearning && !this.mapper.learning) {
       this.saveBindings();
       this.onChange?.();

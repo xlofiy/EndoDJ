@@ -1,13 +1,14 @@
 /** DOM user interface. Plain TypeScript, no framework. */
 import type { App } from '../app/app';
-import { BEATJUMP_PAD_SIZES, BEATLOOP_PAD_SIZES } from '../app/app';
+import { BEATJUMP_PAD_SIZES, BEATLOOP_PAD_SIZES, PADFX } from '../app/app';
+import { evaluate, FLX2_TEST_STEPS, testReport, type StepResult } from '../midi/controller-test';
 import { HOTCUE_COUNT, TEMPO_RANGES, type Deck } from '../audio/deck';
 import { camelot, camelotNumber, keyName } from '../audio/key';
 import { BEAT_FRACTIONS, EFFECT_TYPES, type EffectType } from '../audio/effects';
 import { meterLevel, type FxTarget, type OutputMode } from '../audio/engine';
 import type { CrossfaderCurve } from '../audio/mixmath';
 import { ddjFlx2Bindings } from '../midi/ddj-flx2';
-import type { ControlKind, MidiBinding } from '../midi/mapping';
+import { describeMidi, type ControlKind, type MidiBinding } from '../midi/mapping';
 import { download, esc, LibraryView } from './library-view';
 import { PlatterView } from './platter-view';
 import { applyPrefs, loadPrefs, savePrefs, type Prefs } from './prefs';
@@ -17,7 +18,7 @@ import { renderGuides } from './guides';
 /** Deck colours (match --deck-a / --deck-b in style.css) */
 const DECK_COLORS = ['#0d9be6', '#5cbf1e'];
 
-type PadMode = 'hotcue' | 'beatloop' | 'beatjump' | 'sampler';
+type PadMode = 'hotcue' | 'padfx' | 'beatloop' | 'beatjump' | 'sampler';
 type SettingsTab = 'general' | 'audio' | 'guides';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = document): T => {
@@ -192,6 +193,7 @@ export class UI {
             <span class="label">PADS</span>
             <select class="pad-mode">
               <option value="hotcue">Hot cue</option>
+              <option value="padfx">Pad FX</option>
               <option value="beatloop">Beat loop</option>
               <option value="beatjump">Beat jump</option>
               <option value="sampler">Sampler</option>
@@ -313,6 +315,10 @@ export class UI {
           deck.clearHotcue(p);
           return;
         }
+        if (ui.padMode === 'sampler' && e.shiftKey) {
+          this.app.sampler.stop(p);
+          return;
+        }
         if (ui.padMode === 'sampler' && !this.app.sampler.slots[p]) {
           this.pickSample(p);
           return;
@@ -321,7 +327,7 @@ export class UI {
         this.control(padControl(), 1);
       });
       const up = () => {
-        if (ui.padMode === 'hotcue') this.control(padControl(), 0);
+        if (ui.padMode === 'hotcue' || ui.padMode === 'padfx') this.control(padControl(), 0);
       };
       b.addEventListener('pointerup', up);
       b.addEventListener('pointercancel', up);
@@ -426,6 +432,11 @@ export class UI {
           const h = deck.hotcues[p];
           label = h === null ? `${p + 1}` : `${p + 1} · ${fmtTime(h)}`;
           bg = h === null ? '' : HOTCUE_COLORS[p];
+          break;
+        }
+        case 'padfx': {
+          const [type, beats] = PADFX[p];
+          label = `${EFFECT_TYPES.find((t) => t.id === type)?.name.split(' ')[0]} ${fmtBeats(beats)}`;
           break;
         }
         case 'beatloop':
@@ -667,7 +678,114 @@ export class UI {
       seen.set(`deck${n}.beatjumpFwd`, 'button');
       for (const k of ['keyDown', 'keyUp', 'keyReset', 'keySync', 'keyLock']) seen.set(`deck${n}.${k}`, 'button');
     }
+    seen.set('mixer.masterCue', 'button');
     return [...seen].map(([control, kind]) => ({ control, kind }));
+  }
+
+  // ------------------------------------------------------------------ controller test
+
+  private ctlTest: { i: number; results: (StepResult | undefined)[]; pending: StepResult | null; done: boolean; advancing: boolean } | null = null;
+
+  private startControllerTest(): void {
+    const midi = this.app.midi;
+    if (!midi.input) {
+      this.toast('Connect the DDJ-FLX2 (and pick it as MIDI input) first.', true);
+      return;
+    }
+    this.ctlTest = { i: 0, results: [], pending: null, done: false, advancing: false };
+    midi.onTest = (raw, events) => {
+      const t = this.ctlTest;
+      if (!t || t.done || t.advancing) return; // a knob keeps sending while we move on
+      const r = evaluate(FLX2_TEST_STEPS[t.i], raw, events);
+      if (!r) return;
+      if (r.status === 'pass') {
+        t.results[t.i] = r;
+        t.pending = null;
+        t.advancing = true;
+        this.renderControllerTest('✓');
+        window.setTimeout(() => {
+          t.advancing = false;
+          this.stepControllerTest(1);
+        }, 350);
+      } else {
+        t.pending = r;
+        this.renderControllerTest();
+      }
+    };
+    this.renderControllerTest();
+  }
+
+  private stepControllerTest(delta: number): void {
+    const t = this.ctlTest;
+    if (!t) return;
+    t.pending = null;
+    t.i = Math.max(0, t.i + delta);
+    if (t.i >= FLX2_TEST_STEPS.length) {
+      t.done = true;
+      this.app.midi.onTest = null;
+    }
+    this.renderControllerTest();
+  }
+
+  stopControllerTest(): void {
+    this.app.midi.onTest = null;
+    if (this.ctlTest && !this.ctlTest.done) this.ctlTest = null;
+  }
+
+  private renderControllerTest(flash = ''): void {
+    const box = document.querySelector<HTMLElement>('#ctl-test');
+    const t = this.ctlTest;
+    if (!box) return;
+    if (!t) {
+      box.innerHTML = '';
+      return;
+    }
+    const midi = this.app.midi;
+    if (t.done) {
+      const report = testReport(midi.input?.name ?? '', t.results);
+      box.innerHTML = `<h3>Test finished</h3><pre id="midi-monitor" class="mono" style="height:180px">${esc(report)}</pre>
+        <div class="field"><button id="ct-copy">Copy report</button><button id="ct-save">Save report…</button>
+        <span class="muted">Paste the report to your developer (or Claude) to fix the default mapping for everyone.</span></div>`;
+      $('#ct-copy', box).onclick = () =>
+        void navigator.clipboard.writeText(report).then(
+          () => this.toast('Report copied.'),
+          () => this.toast('Copy failed — use Save report instead.', true),
+        );
+      $('#ct-save', box).onclick = () => download('endodj-controller-test.txt', report);
+      return;
+    }
+    const step = FLX2_TEST_STEPS[t.i];
+    const p = t.pending;
+    box.innerHTML = `
+      <div class="warn" style="background:rgb(13 155 230 / 0.12);border-color:var(--accent)">
+        <div class="label">Step ${t.i + 1} of ${FLX2_TEST_STEPS.length}</div>
+        <p style="font-size:15px;margin:6px 0"><b>${esc(step.prompt)}</b> ${flash ? `<span style="color:var(--accent-2);font-weight:700">${flash}</span>` : ''}</p>
+        ${
+          p && p.status === 'mismatch'
+            ? `<p>EndoDJ received <code class="mono">${esc(describeMidi(p.raw))}</code>, which is
+                ${p.got === 'not mapped' ? 'not mapped to anything' : `mapped to <b>${esc(p.got)}</b>`}.</p>
+               <button id="ct-fix" class="on">Use this for ${esc(step.control)}</button>`
+            : '<p class="muted">Waiting for the controller…</p>'
+        }
+        <div class="field"><button id="ct-back">Back</button><button id="ct-skip">Skip</button><button id="ct-stop">Stop test</button></div>
+      </div>`;
+    $('#ct-back', box).onclick = () => this.stepControllerTest(-1);
+    $('#ct-skip', box).onclick = () => {
+      t.results[t.i] ??= { status: 'skipped' };
+      this.stepControllerTest(1);
+    };
+    $('#ct-stop', box).onclick = () => {
+      t.done = true;
+      midi.onTest = null;
+      this.renderControllerTest();
+    };
+    box.querySelector<HTMLButtonElement>('#ct-fix')?.addEventListener('click', () => {
+      if (!p || p.status !== 'mismatch') return;
+      midi.mapper.bindRaw(step.control, step.kind, p.raw);
+      midi.saveBindings();
+      t.results[t.i] = { status: 'fixed', raw: p.raw };
+      this.stepControllerTest(1);
+    });
   }
 
   private describeBinding(b: MidiBinding): string {
@@ -684,9 +802,12 @@ export class UI {
       body.innerHTML = `
         ${midi.error ? `<p class="error">${esc(midi.error)}</p>` : ''}
         <div class="field"><span>MIDI input</span><select id="midi-input"></select></div>
-        <p class="warn">The built-in DDJ-FLX2 mapping follows Pioneer's DDJ-FLX4/DDJ-400 MIDI layout and has
-          <b>not been verified on a real DDJ-FLX2 yet</b>. Turn on the monitor, move each control, and use <b>Learn</b>
-          to fix anything that does not respond.</p>
+        <p class="warn">The DDJ-FLX2 controls match the official manual, but the MIDI numbers have <b>not been
+          verified on a real unit yet</b>. Run the controller test once: it checks every control and fixes
+          mismatches in one click.</p>
+        <div class="field"><button id="ctl-test-start" class="on">Test controller</button>
+          <span class="muted">About 2 minutes. Your presses won't play anything while the test runs.</span></div>
+        <div id="ctl-test"></div>
         <div class="field"><span>MIDI monitor</span><label class="inline"><input type="checkbox" id="midi-mon" ${midi.monitor ? 'checked' : ''}/> show incoming messages</label>
           <button id="midi-mon-clear">Clear</button></div>
         <pre id="midi-monitor" class="mono"></pre>
@@ -699,6 +820,8 @@ export class UI {
         </details>`;
       const sel = $<HTMLSelectElement>('#midi-input', body);
       sel.onchange = () => midi.selectInput(sel.value);
+      $('#ctl-test-start', body).onclick = () => this.startControllerTest();
+      this.renderControllerTest();
       const mon = $<HTMLInputElement>('#midi-mon', body);
       mon.onchange = () => {
         midi.monitor = mon.checked;
@@ -903,7 +1026,10 @@ export class UI {
       </table>
       <p class="muted">Mouse: drag the scrolling waveform to scrub (wheel = zoom), click the overview to seek, drag a platter to
         scratch, double-click a knob to reset it, right-click a hot cue pad to clear it, drag the bar above the song list to resize it.</p>`;
-    $('#controller-dlg').addEventListener('close', () => this.app.midi.mapper.cancelLearn());
+    $('#controller-dlg').addEventListener('close', () => {
+      this.app.midi.mapper.cancelLearn();
+      this.stopControllerTest();
+    });
   }
 
   // ================================================================== keyboard

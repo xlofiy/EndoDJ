@@ -35,8 +35,9 @@ describe('MidiMapper', () => {
     const m = mapper();
     expect(m.handle([0xb0, 0x22, 0x43])[0]).toMatchObject({ control: 'deck1.jogScratch', value: 3 });
     expect(m.handle([0xb1, 0x21, 0x3e])[0]).toMatchObject({ control: 'deck2.jogBend', value: -2 });
-    expect(m.handle([0xb6, 0x40, 0x01])[0]).toMatchObject({ control: 'browser.scroll', value: 1 });
-    expect(m.handle([0xb6, 0x40, 0x7f])[0]).toMatchObject({ control: 'browser.scroll', value: -1 });
+    const enc = new MidiMapper([{ type: 'cc', channel: 6, number: 0x40, control: 'browser.scroll', kind: 'encoder' }]);
+    expect(enc.handle([0xb6, 0x40, 0x01])[0]).toMatchObject({ control: 'browser.scroll', value: 1 });
+    expect(enc.handle([0xb6, 0x40, 0x7f])[0]).toMatchObject({ control: 'browser.scroll', value: -1 });
   });
 
   it('maps pads per deck and shift layer', () => {
@@ -62,6 +63,29 @@ describe('MidiMapper', () => {
     expect(m.learning).toBeNull();
     expect(m.handle([0x9e, 0x01, 0x7f])[0].control).toBe('deck1.play');
     expect(m.handle([0x90, 0x0b, 0x7f])).toEqual([]);
+  });
+
+  it('maps the FLX2 pad modes (hot cue, Pad FX, beat loop, sampler) and SHIFT layers', () => {
+    const m = mapper();
+    expect(m.handle([0x97, 0x10, 0x7f])[0].control).toBe('deck1.padfx1');
+    expect(m.handle([0x99, 0x63, 0x7f])[0].control).toBe('deck2.beatloop4');
+    expect(m.handle([0x97, 0x37, 0x7f])[0].control).toBe('deck1.sampler8');
+    expect(m.handle([0x98, 0x30, 0x7f])[0].control).toBe('deck1.samplerStop1');
+  });
+
+  it('has no bindings for controls the FLX2 does not have', () => {
+    const controls = new Set(ddjFlx2Bindings().map((b) => b.control));
+    for (const c of ['deck1.trim', 'deck1.loopIn', 'deck1.load', 'browser.scroll', 'fx.toggle', 'deck1.syncOff']) {
+      expect(controls.has(c)).toBe(false);
+    }
+  });
+
+  it('bindRaw replaces the control’s old binding', () => {
+    const m = mapper();
+    expect(m.bindRaw('deck1.play', 'button', [0x90, 0x4b, 0x7f])).toMatchObject({ type: 'note', channel: 0, number: 0x4b });
+    expect(m.handle([0x90, 0x4b, 0x7f])[0].control).toBe('deck1.play');
+    expect(m.handle([0x90, 0x0b, 0x7f])).toEqual([]);
+    expect(m.bindRaw('deck1.play', 'button', [0xf8])).toBeNull();
   });
 
   it('builds LED messages for buttons', () => {
