@@ -39,9 +39,20 @@ export class LoopLab {
     return this.worker;
   }
 
-  /** Rendered buffer for a built-in loop (rendered once per session, then cached). */
+  /** Buffer for a Loop Lab sound: decoded from public/loops/ or synthesised; cached per session. */
   buffer(loopId: string): Promise<AudioBuffer> {
     let p = this.cache.get(loopId);
+    const file = this.def(loopId)?.file;
+    if (!p && file) {
+      p = fetch(`${import.meta.env.BASE_URL}loops/${file}`)
+        .then((r) => {
+          if (!r.ok) throw new Error(`Could not load ${file} (${r.status})`);
+          return r.arrayBuffer();
+        })
+        .then((data) => this.engine.ctx.decodeAudioData(data));
+      p.catch(() => this.cache.delete(loopId));
+      this.cache.set(loopId, p);
+    }
     if (!p) {
       p = new Promise<AudioBuffer>((resolve, reject) => {
         const id = this.nextId++;

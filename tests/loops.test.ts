@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import notices from '../docs/THIRD_PARTY.md?raw';
+
+const shippedFiles = Object.keys(import.meta.glob('../public/loops/*.ogg')).map((p) => p.split('/').pop());
 import { detectBeatGrid } from '../src/audio/bpm';
 import { camelot, detectKey, parseKey } from '../src/audio/key';
 import { bpmFromName, withNameHint, GENRES, LOOPS, loopLengthSeconds, renderLoop } from '../src/loops/catalog';
@@ -11,7 +14,7 @@ describe('Loop Lab catalogue', () => {
     for (const g of GENRES) expect(LOOPS.some((l) => l.genre === g)).toBe(true);
   });
 
-  for (const def of LOOPS) {
+  for (const def of LOOPS.filter((l) => l.render)) {
     it(`renders "${def.name}" cleanly`, () => {
       const [L, R] = renderLoop(def, SR);
       expect(L.length).toBe(Math.round(loopLengthSeconds(def) * SR));
@@ -55,6 +58,22 @@ describe('Loop Lab catalogue', () => {
       });
     }
   }
+});
+
+describe('bundled CC0 sounds', () => {
+  const bundled = LOOPS.filter((l) => l.file);
+  it('ship a file and a CC0 credit for every bundled sound (and no unlisted files)', () => {
+    expect(shippedFiles.sort()).toEqual(bundled.map((l) => l.file).sort());
+    expect(bundled.length).toBeGreaterThanOrEqual(10);
+    for (const l of bundled) {
+      expect(shippedFiles).toContain(l.file);
+      expect(l.credit?.license).toBe('CC0');
+      expect(l.credit?.url).toMatch(/^https:\/\/opengameart\.org\/content\//);
+    }
+  });
+  it('are all credited in docs/THIRD_PARTY.md', () => {
+    for (const l of bundled) expect(notices).toContain(l.file!);
+  });
 });
 
 describe('bpmFromName', () => {

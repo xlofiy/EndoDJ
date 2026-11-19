@@ -1,7 +1,9 @@
 /**
- * Loop Lab catalogue: original, procedurally generated loops and sound effects for
- * EDM, rave, techno, scene/electro, breakcore and hyperpop. All sounds are synthesised
- * from code in this repository (MIT licensed) — free to use in mixes, streams and releases.
+ * Loop Lab catalogue for EDM, rave, techno, scene/electro, breakcore and hyperpop:
+ *  - CC0 (public-domain) loops and FX from OpenGameArt, cut/verified by the pipeline described
+ *    in docs/THIRD_PARTY.md and shipped in public/loops/ (first in the list), and
+ *  - original loops and FX synthesised from code in this repository (MIT).
+ * Everything is free to use in mixes, streams and releases.
  */
 import { Canvas, clap, crush, cymbal, hat, kick, noise, snare, sweep, synth, SVF, softClip, TAU, type SynthNote } from './dsp';
 
@@ -20,10 +22,107 @@ export interface LoopDef {
   seconds?: number;
   /** has a steady kick/snare pulse that BPM detection can lock onto */
   steadyBeat: boolean;
-  /** musical key ("Am", "F#"…); omitted for unpitched drums and FX */
+  /** musical key ("Am", "F#"…); omitted for unpitched drums, FX and unclear material */
   key?: string;
-  render(c: Canvas, bpm: number): void;
+  /** synthesised loops: draws the sound into the canvas */
+  render?: (c: Canvas, bpm: number) => void;
+  /** bundled recordings: file name in public/loops/ (starts on a downbeat, exact bar length) */
+  file?: string;
+  credit?: { title: string; author: string; url: string; license: 'CC0' };
 }
+
+const OGA = 'https://opengameart.org/content/';
+
+/** Bundled CC0 material (BPM / key / length verified when cut — see docs/THIRD_PARTY.md). */
+const BUNDLED: LoopDef[] = [
+  {
+    id: 'cc0-techno-oioioi',
+    name: 'OIOI Warehouse',
+    genre: 'Techno',
+    kind: 'drums',
+    bpm: 110,
+    bars: 8,
+    steadyBeat: true,
+    key: 'Bm',
+    file: 'cc0-techno-oioioi.ogg',
+    credit: { title: 'OIOIOIOIOIOI', author: 'cinameng', url: `${OGA}oioioioioioi`, license: 'CC0' },
+  },
+  {
+    id: 'cc0-techno-tense-drums',
+    name: 'Tense Bass Drums',
+    genre: 'Techno',
+    kind: 'drums',
+    bpm: 140,
+    bars: 2,
+    steadyBeat: true,
+    key: 'D',
+    file: 'cc0-techno-tense-drums.ogg',
+    credit: { title: 'Tense Bass Boost Drum Loop 140 BPM', author: 'Fupi', url: `${OGA}tense-bass-boost-drum-loop-140-bpm`, license: 'CC0' },
+  },
+  {
+    id: 'cc0-edm-technomania',
+    name: 'Technomania Drop',
+    genre: 'EDM',
+    kind: 'synth',
+    bpm: 142,
+    bars: 8,
+    steadyBeat: true,
+    key: 'Bm',
+    file: 'cc0-edm-technomania.ogg',
+    credit: { title: "Technomania101 - 2000's europop electronic dance music", author: 'Fupi', url: `${OGA}technomania101-2000s-europop-electronic-dance-music`, license: 'CC0' },
+  },
+  {
+    id: 'cc0-edm-simple-drumbeat',
+    name: 'Simple Drumbeat',
+    genre: 'EDM',
+    kind: 'drums',
+    bpm: 140,
+    bars: 8,
+    steadyBeat: true,
+    file: 'cc0-edm-simple-drumbeat.ogg',
+    credit: { title: 'simple drumbeat', author: 'Turnovus', url: `${OGA}simple-drumbeat`, license: 'CC0' },
+  },
+  {
+    id: 'cc0-rave-wuffly',
+    name: 'Ravey Wuffly Land',
+    genre: 'Rave',
+    kind: 'synth',
+    bpm: 125,
+    bars: 8,
+    steadyBeat: true,
+    file: 'cc0-rave-wuffly.ogg',
+    credit: { title: 'Things Got a Bit Ravey in Wuffly Land Tonight', author: 'Spring Spring', url: `${OGA}things-got-a-bit-ravey-in-wuffly-land-tonight`, license: 'CC0' },
+  },
+  ...(
+    [
+      ['cc0-vinyl-start-aidanwalker', 'Vinyl Spin-Up', 4.1, 'Vinyl', 'Aidan_Walker', 'vinyl'],
+      ['cc0-siren-aquinn', 'Alarm Siren', 4, 'Sirens and Alarm Noise', 'aquinn', 'sirens-and-alarm-noise'],
+      ['cc0-distant-boom-nenadsimic', 'Distant Boom', 4, 'Muffled Distant Explosion', 'NenadSimic', 'muffled-distant-explosion'],
+      ['cc0-laser-cannon-tad', 'Laser Cannon', 3.5, 'Doomsday Laser Cannon Sound Effect', 'TAD', 'doomsday-laser-cannon-sound-effect'],
+      ['cc0-laser-kenney', 'Digital Laser', 1.53, '63 Digital sound effects', 'Kenney', '63-digital-sound-effects-lasers-phasers-space-etc'],
+      ['cc0-zap-up-kenney', 'Zap Up', 1.09, '63 Digital sound effects', 'Kenney', '63-digital-sound-effects-lasers-phasers-space-etc'],
+      ['cc0-phaser-up-kenney', 'Phaser Up', 0.42, '63 Digital sound effects', 'Kenney', '63-digital-sound-effects-lasers-phasers-space-etc'],
+      ['cc0-phaser-down-kenney', 'Phaser Down', 0.25, '63 Digital sound effects', 'Kenney', '63-digital-sound-effects-lasers-phasers-space-etc'],
+      ['cc0-synth-laser-rubberduck', 'Synth Laser', 0.22, '50 CC0 retro / synth SFX', 'rubberduck', '50-cc0-retro-synth-sfx'],
+      ['cc0-retro-explosion-rubberduck', 'Retro Blast', 1.05, '50 CC0 retro / synth SFX', 'rubberduck', '50-cc0-retro-synth-sfx'],
+      ['cc0-power-up-rubberduck', 'Power Up', 0.54, '50 CC0 retro / synth SFX', 'rubberduck', '50-cc0-retro-synth-sfx'],
+      ['cc0-swish-artisticdude', 'Swish', 0.17, 'Swishes Sound Pack', 'artisticdude', 'swishes-sound-pack'],
+    ] as const
+  ).map(
+    ([id, name, seconds, title, author, page]): LoopDef => ({
+      id,
+      name,
+      genre: 'FX',
+      kind: 'sfx',
+      bpm: 0,
+      bars: 0,
+      seconds,
+      steadyBeat: false,
+      file: `${id}.ogg`,
+      credit: { title, author, url: OGA + page, license: 'CC0' },
+    }),
+  ),
+];
 
 /** Call fn for every step of a pattern string ('x' = hit, 'o' = accent, '.' = rest). */
 function pattern(p: string, stepSec: number, bars: number, fn: (t: number, accent: boolean, i: number) => void): void {
@@ -51,6 +150,7 @@ function chordStabs(chords: [number, number[]][], steps: number[], bpm: number, 
 }
 
 export const LOOPS: LoopDef[] = [
+  ...BUNDLED,
   // ---------------------------------------------------------------- EDM
   {
     id: 'edm-festival-drums',
@@ -614,8 +714,9 @@ export function loopLengthSeconds(def: LoopDef): number {
   return def.bpm > 0 ? (def.bars * 4 * 60) / def.bpm : (def.seconds ?? 2);
 }
 
-/** Render a loop to stereo channels. Beat loops wrap their tails so they repeat seamlessly. */
+/** Render a synthesised loop to stereo channels. Beat loops wrap their tails so they repeat seamlessly. */
 export function renderLoop(def: LoopDef, sampleRate: number): Float32Array[] {
+  if (!def.render) throw new Error(`${def.id} is a bundled file, not a synthesised loop`);
   const len = Math.round(loopLengthSeconds(def) * sampleRate);
   const c = new Canvas(sampleRate, len, def.bpm > 0);
   def.render(c, def.bpm);
