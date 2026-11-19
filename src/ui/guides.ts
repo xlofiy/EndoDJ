@@ -304,6 +304,13 @@ export const GUIDES: Guide[] = [
       <li><b>Drag</b> the scrolling waveform to scrub, and use the <b>mouse wheel</b> on it to zoom. Click the small
         overview to jump anywhere.</li>
       <li>Orange parts are bass-heavy (kicks, bass), blue parts are bright (hats, vocals).</li>
+      <li>The scrolling waveform shows every beat (ticks), every bar (line + bar number) and every 8-bar phrase
+        (gold line), so you can count into a mix.</li>
+      <li>The coloured strip on top of the overview marks the song's sections: <b>intro</b>, <b>drop</b>,
+        <b>break</b>, <b>outro</b>. Click the strip to jump to the start of a section, so you can skip a part.</li>
+      <li><b>PARTS</b> cuts parts of the track: BASS (kick + bass), VOCAL (the centre of the mids, where lead vocals
+        sit), INSTRU (the stereo sides) and HATS (highs). It is a frequency and stereo split, not AI stem
+        separation, so a centred synth also goes with VOCAL.</li>
       <li><b>REV</b> plays backwards. <b>Q</b> (quantize) snaps cues and loops to the beat grid.</li>
     </ul>`,
   },

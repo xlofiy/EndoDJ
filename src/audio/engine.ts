@@ -10,6 +10,7 @@
 import processorUrl from './deck-processor.ts?worker&url';
 import { Deck } from './deck';
 import { BEAT_FRACTIONS, createEffect, type Effect, type EffectType } from './effects';
+import { PartSplitter } from './parts';
 import {
   crossfaderGains,
   eqKnobToDb,
@@ -34,6 +35,7 @@ export class ChannelStrip {
   readonly xfade: GainNode;
   readonly pfl: GainNode;
   readonly meter: AnalyserNode;
+  readonly parts: PartSplitter;
 
   values = { trim: 0.5, low: 0.5, mid: 0.5, high: 0.5, filter: 0.5, volume: 0.8, pfl: false };
 
@@ -60,7 +62,9 @@ export class ChannelStrip {
     this.meter = ctx.createAnalyser();
     this.meter.fftSize = 1024;
 
-    input.connect(this.trim).connect(this.low).connect(this.mid).connect(this.high).connect(this.filter);
+    this.parts = new PartSplitter(ctx);
+    input.connect(this.parts.input);
+    this.parts.output.connect(this.trim).connect(this.low).connect(this.mid).connect(this.high).connect(this.filter);
     this.filter.connect(this.fxIn);
     this.fxIn.connect(this.fxOut); // direct until an effect is inserted
     this.fxOut.connect(this.fader).connect(this.xfade).connect(master);

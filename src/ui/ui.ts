@@ -5,6 +5,7 @@ import { evaluate, FLX2_TEST_STEPS, testReport, type StepResult } from '../midi/
 import { HOTCUE_COUNT, TEMPO_RANGES, type Deck } from '../audio/deck';
 import { camelot, camelotNumber, keyName } from '../audio/key';
 import { BEAT_FRACTIONS, EFFECT_TYPES, type EffectType } from '../audio/effects';
+import { PARTS, type Part } from '../audio/parts';
 import { meterLevel, type FxTarget, type OutputMode } from '../audio/engine';
 import type { CrossfaderCurve } from '../audio/mixmath';
 import { ddjFlx2Bindings } from '../midi/ddj-flx2';
@@ -190,6 +191,10 @@ export class UI {
           <button class="key-sync" title="Shift the key to match the other deck (Camelot)">KEY SYNC</button>
           <button class="keylock" title="Key lock (master tempo): tempo changes keep the pitch">KEY LOCK</button>
         </div>
+        <div class="keyrow partsrow" title="Cut parts of the track. A frequency + stereo split, not AI stem separation: VOCAL is everything in the centre of the mids.">
+          <span class="label">PARTS</span>
+          ${PARTS.map((p) => `<button class="on" data-part="${p.id}" title="${p.title} — click to cut / bring back">${p.name}</button>`).join('')}
+        </div>
         <div class="perf">
           <div class="row">
             <span class="label">PADS</span>
@@ -279,6 +284,14 @@ export class UI {
     ] as const) {
       $(cls, root).onclick = () => this.control(`deck${n}.${control}`, 1);
     }
+    const parts = this.app.engine.strips[i].parts;
+    root.querySelectorAll<HTMLButtonElement>('[data-part]').forEach((b) => {
+      b.onclick = () => {
+        const p = b.dataset.part as Part;
+        parts.set(p, !parts.on[p]);
+        b.classList.toggle('on', parts.on[p]);
+      };
+    });
     ui.rev.onclick = () => deck.setReverse(!deck.reverse);
     ui.quant.onclick = () => {
       deck.quantize = !deck.quantize;

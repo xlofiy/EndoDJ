@@ -1,6 +1,7 @@
 /** Canvas renderers for the overview and scrolling (zoomed) waveforms. */
 import type { Deck } from '../audio/deck';
 import { timeOfBeat } from '../audio/mixmath';
+import { detectSections, SECTION_COLORS, type Section } from '../audio/sections';
 
 export const HOTCUE_COLORS = ['#ff4d5e', '#ff9f1c', '#ffd23f', '#3ddc84', '#00d1b2', '#3da5ff', '#a06cff', '#ff6bd6'];
 
@@ -37,11 +38,17 @@ export class OverviewView {
   private cachedFor: unknown = null;
   private cachedGrid: unknown = null;
 
+  /** intro / drop / break … of the loaded track (empty until the grid and waveform are known) */
+  sections: Section[] = [];
+
   constructor(readonly canvas: HTMLCanvasElement, private deck: Deck) {
+    canvas.title = 'Click to jump · click the coloured strip on top to jump to the start of a section';
     canvas.addEventListener('pointerdown', (e) => {
       if (!this.deck.loaded) return;
       const r = canvas.getBoundingClientRect();
-      this.deck.seek(((e.clientX - r.left) / r.width) * this.deck.duration);
+      const t = ((e.clientX - r.left) / r.width) * this.deck.duration;
+      const sec = e.clientY - r.top < r.height * 0.3 ? this.sections.find((s) => t >= s.start && t < s.end) : undefined;
+      this.deck.seek(sec ? sec.start : t);
     });
   }
 
@@ -71,7 +78,21 @@ export class OverviewView {
       g.fillStyle = waveColor(low);
       g.fillRect(x, mid - h, 1, h * 2);
     }
-    // a tick every 8 bars (32 beats) shows the phrase structure
+    // sections strip on top, a tick every 8 bars (32 beats) at the bottom
+    this.sections = deck.grid ? detectSections(wf, deck.grid, deck.duration) : [];
+    const dpr = window.devicePixelRatio || 1;
+    const stripH = Math.round(H * 0.18);
+    g.font = `bold ${8 * dpr}px system-ui`;
+    for (const sec of this.sections) {
+      const x0 = Math.round((sec.start / deck.duration) * W);
+      const x1 = Math.round((sec.end / deck.duration) * W);
+      g.fillStyle = SECTION_COLORS[sec.label];
+      g.fillRect(x0, 0, Math.max(1, x1 - x0 - 1), stripH);
+      if (x1 - x0 > 34 * dpr) {
+        g.fillStyle = '#fff';
+        g.fillText(sec.label.toUpperCase(), x0 + 3 * dpr, stripH + 9 * dpr);
+      }
+    }
     if (deck.grid) {
       g.fillStyle = 'rgba(255,196,64,0.8)';
       const phrase = (32 * 60) / deck.grid.bpm;
