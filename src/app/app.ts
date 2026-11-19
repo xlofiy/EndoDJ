@@ -11,6 +11,8 @@ import { Library } from '../library/library';
 import { MidiController } from '../midi/midi';
 import type { ControlEvent } from '../midi/mapping';
 import { Automix } from './automix';
+import { LoopLab } from '../loops/looplab';
+import { withNameHint } from '../loops/catalog';
 import { Sampler } from './sampler';
 
 export const BEATLOOP_PAD_SIZES = [0.25, 0.5, 1, 2, 4, 8, 16, 32];
@@ -22,6 +24,7 @@ export class App {
   midi = new MidiController();
   automix!: Automix;
   sampler!: Sampler;
+  looplab!: LoopLab;
   private worker = new AnalysisWorker();
   private nextJob = 1;
   private jobs = new Map<number, (r: AnalysisResponse) => void>();
@@ -42,6 +45,7 @@ export class App {
     await this.library.restoreHandles();
     this.automix = new Automix(this);
     this.sampler = new Sampler(this.engine);
+    this.looplab = new LoopLab(this.engine);
     this.worker.onmessage = (e: MessageEvent<AnalysisResponse>) => {
       const cb = this.jobs.get(e.data.id);
       this.jobs.delete(e.data.id);
@@ -122,6 +126,8 @@ export class App {
     deck.setAnalysis(rec.bpm > 0 ? null : { bpm: res.bpm, firstBeat: res.firstBeat }, res.waveform);
     const patch: Parameters<Library['update']>[1] = { duration: buffer.duration };
     if (rec.bpm <= 0 && res.bpm > 0) {
+      res.bpm = withNameHint(res.bpm, rec.fileName);
+      deck.setAnalysis({ bpm: res.bpm, firstBeat: res.firstBeat }, null);
       patch.bpm = res.bpm;
       patch.firstBeat = res.firstBeat;
       patch.bpmConfidence = res.confidence;
@@ -141,7 +147,7 @@ export class App {
         const res = await this.analyse(buf, false);
         await this.library.update(t.id, {
           duration: buf.duration,
-          bpm: res.bpm,
+          bpm: withNameHint(res.bpm, t.fileName),
           firstBeat: res.firstBeat,
           bpmConfidence: res.confidence,
         });
@@ -150,6 +156,41 @@ export class App {
       }
       progress(++done, todo.length);
     }
+  }
+
+  /**
+   * Load a Loop Lab sound onto a deck. Beat loops get their exact grid, loop over their
+   * full length, and tempo/phase-sync to the other deck when it is playing.
+   */
+  async loadLoop(deckIndex: number, loopId: string): Promise<boolean> {
+    const deck = this.engine.decks[deckIndex];
+    const def = this.looplab.def(loopId);
+    if (!def) return false;
+    if (deck.playing) {
+      this.toast(`Deck ${deckIndex === 0 ? 'A' : 'B'} is playing — stop it before loading a loop.`, true);
+      return false;
+    }
+    const seq = ++this.loadSeq[deckIndex];
+    const buffer = await this.looplab.buffer(loopId);
+    if (seq !== this.loadSeq[deckIndex] || deck.playing) return false;
+    deck.load({ id: `loop:${loopId}`, title: def.name, artist: `${def.genre} · Loop Lab` }, buffer);
+    this.loggedPlay[deckIndex] = null;
+    if (def.bpm > 0) {
+      deck.setAnalysis({ bpm: def.bpm, firstBeat: 0 }, null);
+      deck.beatloop(def.bars * 4);
+      const other = this.engine.otherDeck(deck);
+      if (other.playing && other.grid) deck.syncTo(other);
+    }
+    const res = await this.analyse(buffer, true);
+    if (seq === this.loadSeq[deckIndex]) deck.setAnalysis(null, res.waveform);
+    this.engine.fx.updateParams();
+    return true;
+  }
+
+  async loopToSampler(slot: number, loopId: string): Promise<void> {
+    const def = this.looplab.def(loopId);
+    if (!def) return;
+    this.sampler.setBuffer(slot, def.name, await this.looplab.buffer(loopId));
   }
 
   /** Correct a deck's BPM (e.g. halve/double) and store it. */
@@ -329,3 +370,4 @@ export class App {
     this.onControl?.();
   }
 }
+

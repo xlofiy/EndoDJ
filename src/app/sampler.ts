@@ -22,7 +22,12 @@ export class Sampler {
 
   async loadFile(slot: number, file: File): Promise<void> {
     const buffer = await this.engine.ctx.decodeAudioData(await file.arrayBuffer());
-    this.slots[slot] = { name: file.name.replace(/\.[^.]+$/, ''), buffer };
+    this.setBuffer(slot, file.name.replace(/\.[^.]+$/, ''), buffer);
+  }
+
+  setBuffer(slot: number, name: string, buffer: AudioBuffer): void {
+    if (this.playing[slot]) this.trigger(slot); // stop the old sound
+    this.slots[slot] = { name, buffer };
   }
 
   /** Start the sample, or stop it if it is still playing. */

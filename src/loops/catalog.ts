@@ -616,3 +616,15 @@ export function bpmFromName(name: string): number {
   const v = parseFloat(m[1]);
   return v >= 50 && v <= 250 ? v : 0;
 }
+
+/**
+ * Loop packs usually put the tempo in the file name ("Kick 128bpm.wav"). When the detected
+ * tempo is the same tempo in another octave (64 / 256), use the octave the name says.
+ */
+export function withNameHint(detected: number, fileName: string): number {
+  const hint = bpmFromName(fileName);
+  if (!(hint > 0) || !(detected > 0)) return detected;
+  const octave = Math.pow(2, Math.round(Math.log2(hint / detected)));
+  const adjusted = detected * octave;
+  return Math.abs(adjusted - hint) <= 1 ? Math.round(adjusted * 100) / 100 : detected;
+}

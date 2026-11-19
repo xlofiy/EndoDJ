@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { detectBeatGrid } from '../src/audio/bpm';
-import { bpmFromName, GENRES, LOOPS, loopLengthSeconds, renderLoop } from '../src/loops/catalog';
+import { bpmFromName, withNameHint, GENRES, LOOPS, loopLengthSeconds, renderLoop } from '../src/loops/catalog';
 
 const SR = 44100;
 
@@ -48,5 +48,15 @@ describe('bpmFromName', () => {
     expect(bpmFromName('BPM140 rave stab.wav')).toBe(140);
     expect(bpmFromName('Track 01.mp3')).toBe(0);
     expect(bpmFromName('loop 2024bpm.wav')).toBe(0);
+  });
+});
+
+describe('withNameHint', () => {
+  it('uses the file name to pick the tempo octave', () => {
+    expect(withNameHint(87, 'dnb roller 174bpm.wav')).toBe(174);
+    expect(withNameHint(128, 'House Loop 128 BPM.wav')).toBe(128);
+    expect(withNameHint(140, 'no tempo here.wav')).toBe(140);
+    // a name that disagrees with the audio is ignored
+    expect(withNameHint(126, 'wrong 140bpm.wav')).toBe(126);
   });
 });
