@@ -1,6 +1,5 @@
 name: Desktop installers
-# Builds the EndoDJ desktop app for Windows (.exe installer), macOS (.dmg) and Linux
-# (.AppImage / .deb). Download them from the run's "Artifacts" section, or — for a version
+# Builds the EndoDJ desktop app for Windows (.exe installer) and Linux (.AppImage / .deb). Download them from the run's "Artifacts" section, or — for a version
 # tag like v0.2.0 — from the GitHub Release this workflow creates.
 on:
   workflow_dispatch:
@@ -16,10 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Pull requests build Windows + Linux. macOS runners were never assigned for this
-        # repository (jobs sat queued and were cancelled), so macOS builds only run for version
-        # tags and manual runs, where a missing macOS build does not block the others.
-        os: ${{ fromJSON(github.event_name == 'pull_request' && '["windows-latest","ubuntu-latest"]' || '["windows-latest","macos-latest","ubuntu-latest"]') }}
+        os: [windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     env:
       # installers are not code-signed yet (see docs/INSTALL.md)
