@@ -12,6 +12,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { AUDIO_EXTENSIONS, isAudioPath, isInside, mayRead } = require('./paths.cjs');
+const { autoUpdater } = require('electron-updater');
 
 const ORIGIN = 'app://endodj';
 const DIST = path.join(__dirname, '..', 'dist');
@@ -133,6 +134,44 @@ ipcMain.handle('endodj:exists', async (event, file) => {
   }
 });
 
+// ------------------------------------------------------------------ auto-update
+// New versions are published as GitHub Releases (xlofiy/EndoDJ) by the "Desktop installers"
+// workflow on every push to main. electron-updater checks them, downloads in the background
+// (verifying the sha512 from latest.yml) and installs on restart / quit.
+
+let update = { status: 'idle', version: null, percent: 0, error: null };
+
+function setUpdate(patch) {
+  update = { ...update, ...patch };
+  for (const w of BrowserWindow.getAllWindows()) w.webContents.send('endodj:update', update);
+}
+
+function checkForUpdates() {
+  if (!app.isPackaged) return setUpdate({ status: 'dev' });
+  autoUpdater.checkForUpdates().catch((e) => setUpdate({ status: 'error', error: String(e?.message ?? e) }));
+}
+
+function setupUpdates() {
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.on('checking-for-update', () => setUpdate({ status: 'checking', error: null }));
+  autoUpdater.on('update-available', (i) => setUpdate({ status: 'downloading', version: i.version, percent: 0 }));
+  autoUpdater.on('update-not-available', () => setUpdate({ status: 'current' }));
+  autoUpdater.on('download-progress', (p) => setUpdate({ status: 'downloading', percent: Math.round(p.percent) }));
+  autoUpdater.on('update-downloaded', (i) => setUpdate({ status: 'ready', version: i.version, percent: 100 }));
+  autoUpdater.on('error', (e) => setUpdate({ status: 'error', error: String(e?.message ?? e) }));
+  checkForUpdates();
+  setInterval(checkForUpdates, 4 * 60 * 60 * 1000);
+}
+
+ipcMain.handle('endodj:update-state', (event) => (fromOurPage(event) ? { ...update, current: app.getVersion() } : null));
+ipcMain.handle('endodj:update-check', (event) => {
+  if (fromOurPage(event)) checkForUpdates();
+});
+ipcMain.handle('endodj:update-install', (event) => {
+  if (fromOurPage(event) && update.status === 'ready') autoUpdater.quitAndInstall();
+});
+
 // ------------------------------------------------------------------ window
 
 function createWindow() {
@@ -184,6 +223,7 @@ app.whenReady().then(() => {
   });
 
   createWindow();
+  setupUpdates();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });

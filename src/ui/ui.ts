@@ -14,6 +14,7 @@ import { PlatterView } from './platter-view';
 import { applyPrefs, loadPrefs, savePrefs, type Prefs } from './prefs';
 import { HOTCUE_COLORS, OverviewView, ZoomView, fitCanvas } from './waveform-view';
 import { renderGuides } from './guides';
+import { native, type UpdateState } from '../library/library';
 
 /** Deck colours (match --deck-a / --deck-b in style.css) */
 const DECK_COLORS = ['#0d9be6', '#5cbf1e'];
@@ -124,6 +125,7 @@ export class UI {
           this.library.renderRows(true);
         }
       });
+    this.watchUpdates();
     this.meters = [$<HTMLCanvasElement>('#meter-0'), $<HTMLCanvasElement>('#meter-1'), $<HTMLCanvasElement>('#master-meter')];
     this.renderMidiStatus();
     this.syncControls();
@@ -975,6 +977,15 @@ export class UI {
       <div class="field"><span>Performance</span><label class="inline"><input type="checkbox" id="pref-lowfx" ${p.lowFx ? 'checked' : ''}/> reduce visual effects (for older laptops)</label></div>
       <h3>Library</h3>
       <div class="field"><span>Tracks</span><span>${this.app.library.tracks.size}</span></div>
+      <h3>Updates</h3>
+      ${
+        native
+          ? `<div class="field"><span>EndoDJ ${esc(this.update?.current ?? '')}</span><span id="update-status">${esc(updateText(this.update))}</span></div>
+             <div class="field"><span></span><button id="update-check">Check for updates</button>
+               <button id="update-install" class="on" ${this.update?.status === 'ready' ? '' : 'hidden'}>Restart to update</button></div>
+             <p class="muted">New versions download automatically in the background and install when you restart EndoDJ.</p>`
+          : '<p class="muted">You are running the web version: reload the page to get the latest build.</p>'
+      }
       <p class="muted">New here? Open the <b>Guides</b> tab for a walk-through of every part of EndoDJ.</p>`;
     const theme = $<HTMLSelectElement>('#pref-theme', body);
     theme.value = p.theme;
@@ -993,6 +1004,28 @@ export class UI {
     compact.onchange = () => this.setPrefs({ compact: compact.checked });
     const lowfx = $<HTMLInputElement>('#pref-lowfx', body);
     lowfx.onchange = () => this.setPrefs({ lowFx: lowfx.checked });
+    body.querySelector<HTMLButtonElement>('#update-check')?.addEventListener('click', () => void native?.updates.check());
+    body.querySelector<HTMLButtonElement>('#update-install')?.addEventListener('click', () => void native?.updates.install());
+  }
+
+  // ------------------------------------------------------------------ updates (desktop app)
+
+  private update: UpdateState | null = null;
+
+  private watchUpdates(): void {
+    if (!native) return;
+    const apply = (s: UpdateState | null) => {
+      if (!s) return;
+      this.update = { ...this.update, ...s };
+      $('#update-btn').hidden = s.status !== 'ready';
+      const box = document.querySelector<HTMLElement>('#update-status');
+      if (box) setText(box, updateText(this.update));
+      const install = document.querySelector<HTMLElement>('#update-install');
+      if (install) install.hidden = s.status !== 'ready';
+    };
+    native.updates.onChange(apply);
+    void native.updates.state().then(apply);
+    $('#update-btn').onclick = () => void native!.updates.install();
   }
 
   /** Close Settings and point at a control for a few seconds ("Show me" in the guides). */
@@ -1124,5 +1157,24 @@ export class UI {
     setText($('#rec-time'), eng.recording ? fmtTime((performance.now() - this.recStart) / 1000) : '');
     if (++this.frame % 15 === 0) this.syncControls();
     requestAnimationFrame(() => this.tick());
+  }
+}
+
+function updateText(u: UpdateState | null): string {
+  switch (u?.status) {
+    case 'checking':
+      return 'Checking for updates…';
+    case 'current':
+      return 'Up to date';
+    case 'downloading':
+      return `Downloading ${u.version ?? 'update'} (${u.percent}%)…`;
+    case 'ready':
+      return `Version ${u.version} is ready — restart to install`;
+    case 'error':
+      return `Could not check for updates: ${u.error}`;
+    case 'dev':
+      return 'Updates are off in development builds';
+    default:
+      return '';
   }
 }

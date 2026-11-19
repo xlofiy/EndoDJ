@@ -92,6 +92,17 @@
       "icon": "build/icon.png",
       "maintainer": "EndoDJ contributors",
       "synopsis": "Free DJ software for the DDJ-FLX2"
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "xlofiy",
+        "repo": "EndoDJ",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "6.8.12"
   }
 }

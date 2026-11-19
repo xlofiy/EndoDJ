@@ -11,11 +11,20 @@ pull request and every version tag:
 | Linux | `EndoDJ-<version>-linux-x86_64.AppImage` or `…-linux-amd64.deb` | AppImage: `chmod +x` it and run. Debian/Ubuntu: `sudo apt install ./EndoDJ-…deb`. |
 
 Where to download:
-- **Releases** (for tagged versions such as `v0.2.0`): the repository's *Releases* page.
+- **Releases**: the repository's *Releases* page — a new one for every change merged into `main`.
 - **Latest development build**: repository → *Actions* → *Desktop installers* → newest run →
   *Artifacts* (`EndoDJ-Windows`, `EndoDJ-Linux`). You must be signed in to GitHub.
 - **macOS** is not built for now (not needed yet). The `mac` section in `package.json` → `build`
   is kept; add `macos-latest` back to the workflow matrix to build a `.dmg`.
+
+### Automatic updates
+Installed apps update themselves (Windows installer and Linux AppImage):
+- Every push to `main` builds a new version and publishes it as a GitHub Release (`v0.2.<build>`).
+- EndoDJ checks the latest Release when it starts and every 4 hours, downloads new versions in the
+  background, and installs them when you restart (or quit). A **Restart to update** button appears in the
+  top bar when one is ready; Settings → General shows the version and a **Check for updates** button.
+- Updates come only from merged changes on `main`, never from work-in-progress branches.
+- The `.deb` package does not self-update — reinstall it, or use the AppImage.
 
 ### "Unknown publisher" warnings
 The installers are **not code-signed yet** (signing certificates cost money). Your system will warn you once:

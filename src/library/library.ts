@@ -26,8 +26,22 @@ export interface NativeFile {
   lastModified: number;
   relativePath: string;
 }
+export interface UpdateState {
+  status: 'idle' | 'dev' | 'checking' | 'current' | 'downloading' | 'ready' | 'error';
+  version: string | null;
+  percent: number;
+  error: string | null;
+  /** installed version */
+  current?: string;
+}
 interface NativeAPI {
   platform: string;
+  updates: {
+    state(): Promise<UpdateState | null>;
+    check(): Promise<void>;
+    install(): Promise<void>;
+    onChange(cb: (s: UpdateState) => void): () => void;
+  };
   pickFolder(): Promise<{ root: string | null; files: NativeFile[] } | null>;
   pickFiles(): Promise<{ root: string | null; files: NativeFile[] } | null>;
   readFile(path: string): Promise<ArrayBuffer>;

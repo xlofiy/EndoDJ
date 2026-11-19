@@ -10,4 +10,16 @@ contextBridge.exposeInMainWorld('endodjNative', {
   /** @returns {Promise<ArrayBuffer>} */
   readFile: (path) => ipcRenderer.invoke('endodj:read-file', path),
   exists: (path) => ipcRenderer.invoke('endodj:exists', path),
+  updates: {
+    /** @returns {Promise<{status, version, percent, error, current}>} */
+    state: () => ipcRenderer.invoke('endodj:update-state'),
+    check: () => ipcRenderer.invoke('endodj:update-check'),
+    install: () => ipcRenderer.invoke('endodj:update-install'),
+    /** @returns {() => void} unsubscribe */
+    onChange: (cb) => {
+      const fn = (_e, state) => cb(state);
+      ipcRenderer.on('endodj:update', fn);
+      return () => ipcRenderer.removeListener('endodj:update', fn);
+    },
+  },
 });
