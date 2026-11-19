@@ -1,42 +1,53 @@
 /*
- * EndoDJ theme "Endo": deep-ocean blues with slanted, italic headings, scene-kid neon
- * (hot pink / lime / checkerboard) and Frutiger-Aero gloss (glassy pills, bubbles, sky light).
+ * EndoDJ theme "Endo" (Aero Scene): Frutiger Aero / Windows-Vista glass — aurora wallpaper,
+ * glass windows with shiny caption bars, a black-glass taskbar, glossy orbs — mixed with
+ * scene-kid neon (hot pink / lime / checkerboard / sparkles).
  * Performance rules: no backdrop-filter, no animated layout, static gradients only; the few
  * animations use transform/opacity and stop with prefers-reduced-motion or "reduce effects".
  */
 :root {
-  --bg: #030a1c;
-  --bg-art: radial-gradient(1200px 500px at 15% -10%, #0d3a8a 0%, transparent 60%),
-    radial-gradient(900px 600px at 110% 10%, #4a0f5c 0%, transparent 55%),
-    radial-gradient(800px 500px at 50% 120%, #003a52 0%, transparent 60%),
-    linear-gradient(180deg, #04102b 0%, #030a1c 100%);
-  --panel: #071a3d;
-  --panel-2: #0c2556;
-  --panel-grad: linear-gradient(180deg, rgb(25 120 255 / 0.18), rgb(4 16 43 / 0.2) 40%), #06173a;
-  --line: #1d4a8f;
-  --text: #eaf6ff;
-  --muted: #8db3dd;
-  --accent: #19c3ff; /* azure */
-  --accent-ink: #00152b;
+  --bg: #021428;
+  /* Vista-style aurora: soft light ribbons over deep ocean blue, plus scene sparkles */
+  --bg-art: radial-gradient(2px 2px at 12% 18%, #fff 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 78% 12%, #ffd1f0 50%, transparent 51%),
+    radial-gradient(2px 2px at 63% 70%, #e8fff0 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 30% 82%, #fff 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 90% 55%, #c9f3ff 50%, transparent 51%),
+    radial-gradient(60% 35% at 20% 30%, rgb(70 255 170 / 0.28), transparent 70%),
+    radial-gradient(55% 30% at 75% 22%, rgb(60 200 255 / 0.32), transparent 70%),
+    radial-gradient(50% 40% at 60% 85%, rgb(255 63 180 / 0.18), transparent 70%),
+    linear-gradient(160deg, transparent 30%, rgb(140 255 220 / 0.12) 38%, transparent 46%),
+    linear-gradient(150deg, transparent 45%, rgb(120 210 255 / 0.12) 52%, transparent 60%),
+    linear-gradient(180deg, #06305a 0%, #031a38 45%, #020c1e 100%);
+  --panel: #0a2648;
+  --panel-2: #12386a;
+  --panel-grad: linear-gradient(180deg, rgb(120 190 255 / 0.24) 0%, rgb(40 110 200 / 0.12) 28%, rgb(6 22 48 / 0.5) 70%),
+    rgb(6 24 52 / 0.45);
+  --line: #2f6aa8;
+  --text: #f2f9ff;
+  --muted: #a6c8ea;
+  --accent: #33ccff; /* Vista cyan */
+  --accent-ink: #00213d;
   --pink: #ff3fb4;
   --lime: #b6ff3b;
-  --deck-a: #19c3ff;
+  --deck-a: #33ccff;
   --deck-b: #ff3fb4;
   --danger: #ff3d5a;
   --ok: #b6ff3b;
   --cue: #ffc53d;
-  --gloss: linear-gradient(180deg, rgb(255 255 255 / 0.38) 0%, rgb(255 255 255 / 0.08) 48%, rgb(0 0 0 / 0) 52%, rgb(0 0 0 / 0.12) 100%);
-  --btn-bg: #10306a;
-  --btn-border: #2a63b8;
-  --radius: 10px;
-  --heading: 'Arial Black', 'Helvetica Neue', Arial, system-ui, sans-serif;
-  --skew: -12deg;
+  --gloss: linear-gradient(180deg, rgb(255 255 255 / 0.45) 0%, rgb(255 255 255 / 0.12) 48%, rgb(255 255 255 / 0) 52%, rgb(0 0 0 / 0.1) 100%);
+  --btn-bg: linear-gradient(180deg, #2a5f99, #123a6b);
+  --btn-border: rgb(150 200 255 / 0.45);
+  --radius: 6px;
+  --heading: 'Segoe UI', 'Trebuchet MS', system-ui, sans-serif;
+  --skew: 0deg;
   color-scheme: dark;
   font-family: 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
   font-size: 13px;
 }
 
 [data-theme='classic'] {
+  --btn-bg: #1c2330;
   --bg: #0c0f14;
   --bg-art: none;
   --panel: #151a22;
@@ -365,19 +376,23 @@ canvas.zoom {
   position: relative;
   overflow: hidden;
 }
+.deck .caption {
+  grid-row: 1;
+}
 .deck .main-col {
   grid-column: 1;
+  grid-row: 2;
 }
 .deck .pitch {
   grid-column: 2;
-  grid-row: 1;
+  grid-row: 2;
 }
 body.platters .deck {
   grid-template-columns: auto minmax(0, 1fr) 50px;
 }
 body.platters .deck .platter-col {
   grid-column: 1;
-  grid-row: 1;
+  grid-row: 2;
 }
 body.platters .deck .main-col {
   grid-column: 2;
@@ -965,4 +980,254 @@ body.lowfx button.big,
 body.lowfx #looplab .card.playing,
 body.lowfx .deck button.play.on {
   box-shadow: none;
+}
+
+
+/* ================================================================ Aero Scene (theme "endo") */
+[data-theme='endo'] {
+  /* glass windows */
+  & .deck,
+  & #mixer,
+  & dialog {
+    border: 1px solid rgb(0 0 0 / 0.55);
+    box-shadow:
+      inset 0 0 0 1px rgb(255 255 255 / 0.28),
+      inset 0 1px 0 rgb(255 255 255 / 0.5),
+      0 8px 24px rgb(0 0 0 / 0.45);
+    border-radius: 9px;
+  }
+  & #deck-0 {
+    border-top: 1px solid rgb(0 0 0 / 0.55);
+  }
+  & #deck-1 {
+    border-top: 1px solid rgb(0 0 0 / 0.55);
+  }
+  /* shiny caption bars */
+  & .caption,
+  & #mixer > .section-title {
+    grid-column: 1 / -1;
+    margin: -8px -8px 2px;
+    padding: 4px 10px;
+    border-radius: 8px 8px 0 0;
+    font-family: var(--heading);
+    font-style: normal;
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    color: #fff;
+    text-shadow: 0 0 8px rgb(255 255 255 / 0.7), 0 1px 1px rgb(0 0 0 / 0.6);
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.42), rgb(255 255 255 / 0.12) 50%, rgb(255 255 255 / 0) 51%),
+      linear-gradient(90deg, rgb(51 204 255 / 0.55), rgb(30 90 170 / 0.35) 60%, rgb(255 63 180 / 0.35));
+    border-bottom: 1px solid rgb(0 0 0 / 0.4);
+    transform: none;
+    display: block;
+  }
+  & #deck-1 .caption {
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.42), rgb(255 255 255 / 0.12) 50%, rgb(255 255 255 / 0) 51%),
+      linear-gradient(90deg, rgb(255 63 180 / 0.55), rgb(30 90 170 / 0.35) 60%, rgb(51 204 255 / 0.35));
+  }
+  & .caption .spark {
+    color: var(--lime);
+    text-shadow: 0 0 6px var(--lime);
+  }
+
+  /* black-glass taskbar */
+  & #topbar {
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.22) 0%, rgb(255 255 255 / 0.06) 48%, rgb(0 0 0 / 0.35) 50%, rgb(0 0 0 / 0.55) 100%),
+      linear-gradient(90deg, #0b1d33, #0a1426 50%, #1d0b26);
+    border-bottom: 1px solid rgb(0 0 0 / 0.8);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35), 0 2px 10px rgb(0 0 0 / 0.5);
+  }
+  & .orb {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    flex: none;
+    background:
+      radial-gradient(circle at 50% 50%, var(--pink) 0 18%, transparent 19%),
+      radial-gradient(circle at 50% 50%, transparent 0 36%, rgb(255 255 255 / 0.85) 37% 40%, transparent 41%),
+      radial-gradient(circle at 35% 25%, #ffffff 0%, #9ae6ff 18%, #1f9be0 45%, #0a3f7a 75%, #041c3a 100%);
+    border: 1px solid rgb(0 0 0 / 0.7);
+    box-shadow: inset 0 1px 1px rgb(255 255 255 / 0.8), 0 0 10px rgb(51 204 255 / 0.65);
+  }
+  & .logo-slab.small {
+    transform: none;
+    font-style: normal;
+    font-size: 18px;
+  }
+  & .logo-slab span {
+    background: none;
+    color: #fff;
+    padding: 0 0 0 2px;
+    text-shadow: 0 0 10px rgb(51 204 255 / 0.9);
+  }
+  & .logo-slab b {
+    background: none;
+    color: var(--pink);
+    padding: 0;
+    text-shadow: 0 0 10px rgb(255 63 180 / 0.9);
+  }
+
+  /* Aero glass buttons with Vista cyan hover glow */
+  & button {
+    background: var(--gloss), var(--btn-bg);
+    border: 1px solid rgb(0 0 0 / 0.55);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.22), inset 0 1px 0 rgb(255 255 255 / 0.5);
+    text-shadow: 0 1px 1px rgb(0 0 0 / 0.5);
+  }
+  & button:hover {
+    border-color: rgb(0 0 0 / 0.55);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.35), inset 0 1px 0 rgb(255 255 255 / 0.6), 0 0 8px rgb(51 204 255 / 0.8);
+  }
+  & button:active {
+    background: linear-gradient(180deg, rgb(0 0 0 / 0.25), rgb(255 255 255 / 0.08)), var(--btn-bg);
+  }
+  & button.on {
+    background: var(--gloss), linear-gradient(180deg, #7fe3ff, #18a8e8);
+    color: var(--accent-ink);
+    text-shadow: none;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.7), 0 0 10px rgb(51 204 255 / 0.75);
+  }
+  & .deck button.play.on,
+  & .deck .loops button.on,
+  & #looplab .genres button.on {
+    background: var(--gloss), linear-gradient(180deg, #d9ff8a, #8ee000);
+    color: #142400;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.7), 0 0 10px rgb(182 255 59 / 0.7);
+  }
+  & .deck button.sync.on,
+  & .deck button.keylock.on {
+    background: var(--gloss), linear-gradient(180deg, #ff9ad8, #ff2fa8);
+    color: #2a0018;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.7), 0 0 10px rgb(255 63 180 / 0.7);
+  }
+  & button.big {
+    border-radius: 999px;
+    background: var(--gloss), linear-gradient(90deg, #33ccff, #6f7cff 50%, #ff3fb4);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.7), 0 0 24px rgb(51 204 255 / 0.55);
+  }
+  & select,
+  & input[type='search'],
+  & input[type='text'],
+  & input[type='number'] {
+    background: linear-gradient(180deg, #021226, #0a2a52);
+    border: 1px solid rgb(0 0 0 / 0.6);
+    box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.6), 0 1px 0 rgb(255 255 255 / 0.15);
+  }
+
+  /* glossy orb slider handles (horizontal sliders; vertical faders keep the native control) */
+  & input[type='range']:not(.vfader) {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    height: 16px;
+  }
+  & input[type='range']:not(.vfader)::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 3px;
+    background: linear-gradient(180deg, #010814, #163a66);
+    box-shadow: inset 0 1px 2px #000, 0 1px 0 rgb(255 255 255 / 0.18);
+  }
+  & input[type='range']:not(.vfader)::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    margin-top: -4px;
+    border-radius: 50%;
+    border: 1px solid #052c50;
+    background: radial-gradient(circle at 35% 28%, #fff 0, #c7f1ff 22%, #33ccff 58%, #0b5fa8 100%);
+    box-shadow: 0 0 6px rgb(51 204 255 / 0.75);
+  }
+  & input[type='range']:not(.vfader)::-moz-range-track {
+    height: 6px;
+    border-radius: 3px;
+    background: linear-gradient(180deg, #010814, #163a66);
+  }
+  & input[type='range']:not(.vfader)::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1px solid #052c50;
+    background: radial-gradient(circle at 35% 28%, #fff 0, #c7f1ff 22%, #33ccff 58%, #0b5fa8 100%);
+  }
+
+  /* glass library */
+  & #library {
+    background: linear-gradient(180deg, rgb(10 40 80 / 0.45), rgb(2 10 24 / 0.7));
+    border-top: 1px solid rgb(255 255 255 / 0.25);
+  }
+  & #lib-sidebar {
+    background: linear-gradient(90deg, rgb(8 32 66 / 0.85), rgb(10 40 80 / 0.7));
+  }
+  & #lib-sidebar .item.active {
+    background: var(--gloss), linear-gradient(180deg, #7fe3ff, #18a8e8);
+    color: var(--accent-ink);
+    box-shadow: 0 0 8px rgb(51 204 255 / 0.6);
+  }
+  & #lib-table th {
+    background: var(--gloss), linear-gradient(180deg, #1e4f86, #0d2c55);
+    color: #e6f4ff;
+  }
+  & #lib-table tr.selected td {
+    background: linear-gradient(180deg, rgb(120 220 255 / 0.45), rgb(51 204 255 / 0.25)) !important;
+  }
+  & #looplab .card {
+    background: var(--gloss), linear-gradient(160deg, rgb(40 110 190 / 0.55), rgb(8 28 60 / 0.85));
+    border: 1px solid rgb(0 0 0 / 0.5);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.2), 0 4px 12px rgb(0 0 0 / 0.35);
+  }
+  & canvas.zoom,
+  & .deck canvas.overview {
+    border: 1px solid rgb(0 0 0 / 0.7);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12);
+  }
+  & .checker {
+    background: repeating-conic-gradient(#0b0b12 0 25%, var(--pink) 0 50%) 0 0 / 12px 12px;
+    height: 5px;
+  }
+  & .deck::before {
+    color: rgb(255 255 255 / 0.06);
+    font-style: normal;
+  }
+}
+
+/* key controls */
+.keyrow {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.keychip {
+  min-width: 70px;
+  text-align: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 700;
+  background: rgb(0 0 0 / 0.35);
+  border: 1px solid var(--line);
+}
+.keychip.shifted {
+  border-color: var(--pink);
+  color: #ffd1ec;
+}
+.keychip.match {
+  border-color: var(--lime);
+  color: var(--lime);
+}
+.caption {
+  display: none;
+}
+[data-theme='endo'] .caption {
+  display: block;
+}
+#looplab .credit {
+  font-size: 11px;
+  color: var(--muted);
+}
+#looplab .credit a {
+  color: var(--accent);
 }

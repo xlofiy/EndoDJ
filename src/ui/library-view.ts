@@ -4,6 +4,7 @@
  */
 import type { App } from '../app/app';
 import { GENRES, LOOPS, loopLengthSeconds, type Genre } from '../loops/catalog';
+import { camelot, parseKey } from '../audio/key';
 import type { TrackRecord } from '../library/db';
 import { formatDuration, toCSV, toM3U, toText, type ExportTrack } from '../library/export';
 import { AUTOMIX_ID, HISTORY_ID, Library } from '../library/library';
@@ -26,6 +27,12 @@ const GENRE_COLORS: Record<Genre, string> = {
 
 export function esc(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+}
+
+/** "Am" → "8A Am" */
+function keyCell(key: string | undefined): string {
+  const k = parseKey(key);
+  return k ? `${camelot(k)} ${esc(key!)}` : '';
 }
 
 export function download(name: string, content: string | Blob, type = 'text/plain'): void {
@@ -314,9 +321,17 @@ export class LibraryView {
     if (this.view === 'all') {
       const k = this.sortKey;
       const dir = this.sortDir;
+      // keys sort around the Camelot wheel (1A, 1B, 2A …), unknown keys last
+      const val = (r: TrackRecord) => {
+        if (k !== 'key') return r[k];
+        const pk = parseKey(r.key);
+        if (!pk) return 99;
+        const c = camelot(pk);
+        return parseInt(c, 10) + (c.endsWith('B') ? 0.5 : 0);
+      };
       list.sort((a, b) => {
-        const va = a.rec[k];
-        const vb = b.rec[k];
+        const va = val(a.rec);
+        const vb = val(b.rec);
         if (typeof va === 'string' && typeof vb === 'string') return va.localeCompare(vb) * dir;
         return ((va as number) - (vb as number)) * dir;
       });
@@ -327,7 +342,7 @@ export class LibraryView {
   private renderHead(): void {
     const sortable = (k: keyof TrackRecord, label: string, w: string) =>
       `<th data-sort="${k}" style="width:${w}">${label}${this.view === 'all' && this.sortKey === k ? (this.sortDir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
-    el('#lib-table thead').innerHTML = `<tr><th style="width:64px">${this.view === HISTORY_ID ? 'Played' : '#'}</th>${sortable('title', 'Title', '38%')}${sortable('artist', 'Artist', '24%')}${sortable('bpm', 'BPM', '64px')}${sortable('duration', 'Time', '60px')}${sortable('playCount', 'Plays', '54px')}<th style="width:${this.app.library.playlist(this.view) ? 190 : 110}px"></th></tr>`;
+    el('#lib-table thead').innerHTML = `<tr><th style="width:64px">${this.view === HISTORY_ID ? 'Played' : '#'}</th>${sortable('title', 'Title', '38%')}${sortable('artist', 'Artist', '24%')}${sortable('bpm', 'BPM', '64px')}${sortable('key', 'Key', '72px')}${sortable('duration', 'Time', '60px')}${sortable('playCount', 'Plays', '54px')}<th style="width:${this.app.library.playlist(this.view) ? 190 : 110}px"></th></tr>`;
   }
 
   /** Render only the rows in (and just around) the viewport. */
@@ -344,7 +359,7 @@ export class LibraryView {
     const lib = this.app.library;
     const loaded = this.app.engine.decks.map((d) => d.track?.id);
     const inPlaylist = !!lib.playlist(this.view);
-    const parts: string[] = [`<tr class="spacer"><td colspan="7" style="height:${first * ROW_H}px"></td></tr>`];
+    const parts: string[] = [`<tr class="spacer"><td colspan="8" style="height:${first * ROW_H}px"></td></tr>`];
     for (let i = first; i < last; i++) {
       const x = this.rows[i];
       const r = x.rec;
@@ -357,13 +372,13 @@ export class LibraryView {
       const firstCol = x.playedAt ? new Date(x.playedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : String(i + 1);
       parts.push(`<tr class="${cls}" draggable="true" data-id="${esc(x.id)}" data-index="${x.index}">
         <td class="muted">${firstCol}</td><td title="${esc(r.fileName)}">${esc(r.title)}</td><td>${esc(r.artist)}</td>
-        <td class="mono">${r.bpm > 0 ? r.bpm.toFixed(1) : ''}</td><td class="mono">${r.duration ? formatDuration(r.duration) : ''}</td>
+        <td class="mono">${r.bpm > 0 ? r.bpm.toFixed(1) : ''}</td><td class="mono">${keyCell(r.key)}</td><td class="mono">${r.duration ? formatDuration(r.duration) : ''}</td>
         <td class="mono">${r.playCount || ''}</td>
         <td><button data-load="0" title="Load to deck A">A</button><button data-load="1" title="Load to deck B">B</button><button data-queue title="Add to Automix queue">Q</button>${
           inPlaylist ? '<button data-up title="Move up">↑</button><button data-down title="Move down">↓</button><button data-remove title="Remove from playlist">✕</button>' : ''
         }</td></tr>`);
     }
-    parts.push(`<tr class="spacer"><td colspan="7" style="height:${(n - last) * ROW_H}px"></td></tr>`);
+    parts.push(`<tr class="spacer"><td colspan="8" style="height:${(n - last) * ROW_H}px"></td></tr>`);
     this.tbody.innerHTML = parts.join('');
   }
 
@@ -434,15 +449,21 @@ export class LibraryView {
         .map((g) => `<button data-genre="${g}" class="${this.genre === g ? 'on' : ''}">${g === 'FX' ? 'FX & one-shots' : g}</button>`)
         .join('')}
         <button id="import-loops" title="Import your own loop pack (WAV/MP3/…) into the playlist “${MY_LOOPS_NAME}”">＋ Import loop pack</button></div>
-      <p class="note">Original loops synthesised by EndoDJ — free to use in mixes, streams and releases. Load one onto a deck:
-        it loops seamlessly, has an exact beat grid, and syncs to the other deck automatically. ▶ previews in your headphones
+      <p class="note">CC0 loops &amp; FX from OpenGameArt plus loops synthesised by EndoDJ — all free to use in mixes, streams and
+        releases. Load a loop onto a deck: it loops seamlessly on an exact beat grid and automatically matches the playing deck's
+        <b>BPM and key</b> (key lock on, so you can still change tempo and key separately). ▶ previews in your headphones
         (or on the master when no headphone output is set up).</p>
       <div class="grid">${loops
         .map(
           (l) => `<div class="card ${previewing === l.id ? 'playing' : ''}" data-loop="${l.id}">
             <div class="name">${esc(l.name)}</div>
             <div class="meta"><span class="tag" style="background:${GENRE_COLORS[l.genre]}">${l.genre}</span>${l.kind}
-              · ${l.bpm > 0 ? `${l.bpm} BPM · ${l.bars} bars` : `${loopLengthSeconds(l).toFixed(1)} s`}</div>
+              · ${l.bpm > 0 ? `${l.bpm} BPM · ${l.bars} bars` : `${loopLengthSeconds(l).toFixed(1)} s`}${l.key ? ` · <b>${keyCell(l.key)}</b>` : ''}</div>
+            <div class="credit">${
+              l.credit
+                ? `CC0 · <a href="${esc(l.credit.url)}" target="_blank" rel="noopener noreferrer" title="${esc(l.credit.title)}">${esc(l.credit.author)} ↗</a>`
+                : 'Original · EndoDJ (MIT)'
+            }</div>
             <div class="actions">
               <button data-act="preview">${previewing === l.id ? '■ Stop' : '▶ Preview'}</button>
               <button data-act="deck" data-deck="0" title="Load onto deck A">→ A</button>

@@ -2,6 +2,7 @@
 import type { App } from '../app/app';
 import { BEATJUMP_PAD_SIZES, BEATLOOP_PAD_SIZES } from '../app/app';
 import { HOTCUE_COUNT, TEMPO_RANGES, type Deck } from '../audio/deck';
+import { camelot, camelotNumber, keyName } from '../audio/key';
 import { BEAT_FRACTIONS, EFFECT_TYPES, type EffectType } from '../audio/effects';
 import { meterLevel, type FxTarget, type OutputMode } from '../audio/engine';
 import type { CrossfaderCurve } from '../audio/mixmath';
@@ -68,6 +69,8 @@ interface DeckUI {
   beatloops: HTMLButtonElement[];
   fader: HTMLInputElement;
   range: HTMLSelectElement;
+  keychip: HTMLElement;
+  keylock: HTMLElement;
 }
 
 export class UI {
@@ -143,6 +146,7 @@ export class UI {
     const n = i + 1;
     root.dataset.letter = i === 0 ? 'A' : 'B';
     root.innerHTML = `
+      <div class="caption"><span class="spark">✦</span> DECK ${i === 0 ? 'A' : 'B'} <span class="spark">✦</span></div>
       <div class="platter-col"${this.prefs.platters ? '' : ' hidden'}><canvas class="platter" title="Drag to scratch, scroll to nudge"></canvas></div>
       <div class="main-col">
         <div class="info">
@@ -164,6 +168,14 @@ export class UI {
           <button class="bpm-half" title="Halve the detected BPM">½</button>
           <button class="bpm-double" title="Double the detected BPM">×2</button>
           <button class="grid-here" title="Put a downbeat at the current position">GRID</button>
+        </div>
+        <div class="keyrow">
+          <span class="label">KEY</span><span class="keychip mono" title="Key you hear now (Camelot · name)">—</span>
+          <button class="key-down" title="Key down one semitone">♭</button>
+          <button class="key-up" title="Key up one semitone">♯</button>
+          <button class="key-reset" title="Back to the original key">0</button>
+          <button class="key-sync" title="Shift the key to match the other deck (Camelot)">KEY SYNC</button>
+          <button class="keylock" title="Key lock (master tempo): tempo changes keep the pitch">KEY LOCK</button>
         </div>
         <div class="perf">
           <div class="row">
@@ -193,7 +205,7 @@ export class UI {
       <div class="pitch">
         <select class="range" title="Pitch range">${TEMPO_RANGES.map((r) => `<option value="${r}">±${Math.round(r * 100)}%</option>`).join('')}</select>
         <span class="val mono">0.00%</span>
-        <input class="pitch-fader" type="range" min="-1" max="1" step="0.0005" value="0" title="Tempo (down = faster, like Pioneer)" />
+        <input class="pitch-fader vfader" type="range" min="-1" max="1" step="0.0005" value="0" title="Tempo (down = faster, like Pioneer)" />
         <button class="pitch-reset" title="Reset tempo">0</button>
         <button class="nudge-down" title="Nudge slower (hold)">◀◀</button>
         <button class="nudge-up" title="Nudge faster (hold)">▶▶</button>
@@ -225,6 +237,8 @@ export class UI {
       beatloops: Array.from(root.querySelectorAll<HTMLButtonElement>('[data-beatloop]')),
       fader: $<HTMLInputElement>('.pitch-fader', root),
       range: $<HTMLSelectElement>('.range', root),
+      keychip: $('.keychip', root),
+      keylock: $('.keylock', root),
     };
     this.decks.push(ui);
 
@@ -243,6 +257,15 @@ export class UI {
     hold(ui.sync, `deck${n}.sync`);
     hold($('.nudge-down', root), `deck${n}.nudgeDown`);
     hold($('.nudge-up', root), `deck${n}.nudgeUp`);
+    for (const [cls, control] of [
+      ['.key-down', 'keyDown'],
+      ['.key-up', 'keyUp'],
+      ['.key-reset', 'keyReset'],
+      ['.key-sync', 'keySync'],
+      ['.keylock', 'keyLock'],
+    ] as const) {
+      $(cls, root).onclick = () => this.control(`deck${n}.${control}`, 1);
+    }
     ui.rev.onclick = () => deck.setReverse(!deck.reverse);
     ui.quant.onclick = () => {
       deck.quantize = !deck.quantize;
@@ -372,7 +395,21 @@ export class UI {
       if (ui.fader.value !== v) ui.fader.value = v;
     }
     if (ui.range.value !== String(deck.tempoRange)) ui.range.value = String(deck.tempoRange);
+    this.renderKey(ui, deck);
     if (!this.prefs.compact) this.renderPads(ui, deck);
+  }
+
+  private renderKey(ui: DeckUI, deck: Deck): void {
+    const k = deck.effectiveKey;
+    const shift = deck.keyShift;
+    let text = '—';
+    if (k) text = `${camelot(k)} ${keyName(k)}${shift ? ` (${shift > 0 ? '+' : ''}${shift})` : ''}`;
+    else if (deck.loaded) text = deck.waveform ? 'no key' : '…';
+    setText(ui.keychip, text);
+    const other = this.app.engine.otherDeck(deck).effectiveKey;
+    setClass(ui.keychip, 'match', !!k && !!other && camelotNumber(k) === camelotNumber(other));
+    setClass(ui.keychip, 'shifted', shift !== 0);
+    setClass(ui.keylock, 'on', deck.keyLock);
   }
 
   private renderPads(ui: DeckUI, deck: Deck): void {
@@ -419,7 +456,7 @@ export class UI {
       <div class="ch">
         ${knob(ch, 'trim', 'TRIM')}${knob(ch, 'high', 'HI')}${knob(ch, 'mid', 'MID')}${knob(ch, 'low', 'LOW')}${knob(ch, 'filter', 'FILTER')}
         <button class="pfl" data-ch="${ch}" title="Headphone cue">CUE 🎧</button>
-        <div class="fader"><input type="range" min="0" max="1" step="0.001" data-ch="${ch}" data-param="volume" /></div>
+        <div class="fader"><input class="vfader" type="range" min="0" max="1" step="0.001" data-ch="${ch}" data-param="volume" /></div>
       </div>`;
     m.innerHTML = `
       <h3 class="section-title">Mixer</h3>
@@ -612,6 +649,7 @@ export class UI {
       seen.set(`deck${n}.nudgeUp`, 'button');
       seen.set(`deck${n}.beatjumpBack`, 'button');
       seen.set(`deck${n}.beatjumpFwd`, 'button');
+      for (const k of ['keyDown', 'keyUp', 'keyReset', 'keySync', 'keyLock']) seen.set(`deck${n}.${k}`, 'button');
     }
     return [...seen].map(([control, kind]) => ({ control, kind }));
   }
@@ -723,7 +761,7 @@ export class UI {
     body.innerHTML = `
       <h3>Look &amp; feel</h3>
       <div class="field"><span>Theme</span><select id="pref-theme">
-        <option value="endo">Endo — ocean blue, scene neon, aero gloss</option>
+        <option value="endo">Aero Scene — Vista glass, aurora, scene neon</option>
         <option value="classic">Classic — plain dark</option></select></div>
       <div class="field"><span>Jog platters</span><label class="inline"><input type="checkbox" id="pref-platters" ${p.platters ? 'checked' : ''}/> show round platters on the decks (drag to scratch)</label></div>
       <div class="field"><span>Layout</span><label class="inline"><input type="checkbox" id="pref-compact" ${p.compact ? 'checked' : ''}/> compact decks (bigger song list)</label></div>

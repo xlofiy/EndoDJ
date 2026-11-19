@@ -1,6 +1,7 @@
 /** Optional round "jog platter" display per deck (like VirtualDJ / Serato), drag to scratch. */
 import { JOG_TICKS_PER_REV, type Deck } from '../audio/deck';
 import { fitCanvas, HOTCUE_COLORS } from './waveform-view';
+import { camelot } from '../audio/key';
 
 const REV_PER_SEC = 100 / 3 / 60; // 33⅓ RPM
 
@@ -61,7 +62,8 @@ export class PlatterView {
     if (canvas.offsetParent === null) return; // hidden
     const resized = fitCanvas(canvas);
     const t = deck.time;
-    const sig = `${t.toFixed(3)}|${deck.effectiveBpm.toFixed(2)}|${deck.tempoFactor.toFixed(4)}|${deck.hotcues.join(',')}|${deck.track?.id}|${deck.loopActive}`;
+    const key = deck.effectiveKey;
+    const sig = `${t.toFixed(3)}|${deck.effectiveBpm.toFixed(2)}|${deck.tempoFactor.toFixed(4)}|${deck.hotcues.join(',')}|${deck.track?.id}|${deck.loopActive}|${key ? camelot(key) : ''}`;
     if (!resized && sig === this.last) return;
     this.last = sig;
 
@@ -136,7 +138,7 @@ export class PlatterView {
     g.font = `${Math.round(R * 0.12)}px system-ui, sans-serif`;
     g.fillStyle = 'rgba(234,246,255,0.7)';
     const pct = (deck.tempoFactor - 1) * 100;
-    g.fillText(`BPM  ${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`, cx, cy - R * 0.08);
+    g.fillText(`BPM  ${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%${key ? `  ·  ${camelot(key)}` : ''}`, cx, cy - R * 0.08);
     g.font = `${Math.round(R * 0.17)}px ui-monospace, Menlo, monospace`;
     g.fillStyle = '#ffffff';
     g.fillText(fmt(t), cx, cy + R * 0.18);
