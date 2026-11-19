@@ -183,7 +183,13 @@ export class App {
       return false;
     }
     const seq = ++this.loadSeq[deckIndex];
-    const buffer = await this.looplab.buffer(loopId);
+    let buffer: AudioBuffer;
+    try {
+      buffer = await this.looplab.buffer(loopId);
+    } catch (e) {
+      this.toast(`Could not load "${def.name}": ${(e as Error).message}`, true);
+      return false;
+    }
     if (seq !== this.loadSeq[deckIndex] || deck.playing) return false;
     deck.load({ id: `loop:${loopId}`, title: def.name, artist: `${def.genre} · Loop Lab` }, buffer);
     this.loggedPlay[deckIndex] = null;
@@ -203,10 +209,16 @@ export class App {
     return true;
   }
 
-  async loopToSampler(slot: number, loopId: string): Promise<void> {
+  async loopToSampler(slot: number, loopId: string): Promise<boolean> {
     const def = this.looplab.def(loopId);
-    if (!def) return;
-    this.sampler.setBuffer(slot, def.name, await this.looplab.buffer(loopId));
+    if (!def) return false;
+    try {
+      this.sampler.setBuffer(slot, def.name, await this.looplab.buffer(loopId));
+      return true;
+    } catch (e) {
+      this.toast(`Could not load "${def.name}": ${(e as Error).message}`, true);
+      return false;
+    }
   }
 
   /** Correct a deck's BPM (e.g. halve/double) and store it. */

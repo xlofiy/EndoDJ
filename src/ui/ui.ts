@@ -97,9 +97,16 @@ export class UI {
     this.library.init();
     this.buildDialogs();
     this.bindKeyboard();
+    // the monitor can receive hundreds of messages a second (jog wheels): redraw once per frame
+    let midiFrame = false;
     this.app.midi.onChange = () => {
-      this.renderMidiStatus();
-      if (($('#controller-dlg') as HTMLDialogElement).open) this.renderController(false);
+      if (midiFrame) return;
+      midiFrame = true;
+      requestAnimationFrame(() => {
+        midiFrame = false;
+        this.renderMidiStatus();
+        if (($('#controller-dlg') as HTMLDialogElement).open) this.renderController(false);
+      });
     };
     // highlight loaded tracks in the list when a deck loads something new
     let loaded = '';

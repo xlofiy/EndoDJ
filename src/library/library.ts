@@ -181,12 +181,11 @@ export class Library {
 
   /** Load persisted file handles so tracks from earlier sessions can be played again. */
   async restoreHandles(): Promise<void> {
-    for (const id of this.tracks.keys()) {
-      const h = await this.db.get<FileHandle>('handles', id);
-      if (h) {
-        this.handles.set(id, h);
-        this.storedHandleIds.add(id);
-      }
+    // one bulk read: a per-track read would take seconds for big libraries
+    for (const [id, h] of await this.db.entries<FileHandle>('handles')) {
+      if (typeof id !== 'string' || !this.tracks.has(id)) continue;
+      this.handles.set(id, h);
+      this.storedHandleIds.add(id);
     }
     this.emit();
   }

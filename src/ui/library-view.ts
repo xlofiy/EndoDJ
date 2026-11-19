@@ -342,7 +342,7 @@ export class LibraryView {
   private renderHead(): void {
     const sortable = (k: keyof TrackRecord, label: string, w: string) =>
       `<th data-sort="${k}" style="width:${w}">${label}${this.view === 'all' && this.sortKey === k ? (this.sortDir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
-    el('#lib-table thead').innerHTML = `<tr><th style="width:64px">${this.view === HISTORY_ID ? 'Played' : '#'}</th>${sortable('title', 'Title', '38%')}${sortable('artist', 'Artist', '24%')}${sortable('bpm', 'BPM', '64px')}${sortable('key', 'Key', '72px')}${sortable('duration', 'Time', '60px')}${sortable('playCount', 'Plays', '54px')}<th style="width:${this.app.library.playlist(this.view) ? 190 : 110}px"></th></tr>`;
+    el('#lib-table thead').innerHTML = `<tr><th style="width:64px">${this.view === HISTORY_ID ? 'Played' : '#'}</th>${sortable('title', 'Title', '38%')}${sortable('artist', 'Artist', '24%')}${sortable('bpm', 'BPM', '64px')}${sortable('key', 'Key', '72px')}${sortable('duration', 'Time', '60px')}${sortable('playCount', 'Plays', '54px')}<th style="width:${this.app.library.playlist(this.view) ? 190 : 140}px"></th></tr>`;
   }
 
   /** Render only the rows in (and just around) the viewport. */
@@ -375,7 +375,11 @@ export class LibraryView {
         <td class="mono">${r.bpm > 0 ? r.bpm.toFixed(1) : ''}</td><td class="mono">${keyCell(r.key)}</td><td class="mono">${r.duration ? formatDuration(r.duration) : ''}</td>
         <td class="mono">${r.playCount || ''}</td>
         <td><button data-load="0" title="Load to deck A">A</button><button data-load="1" title="Load to deck B">B</button><button data-queue title="Add to Automix queue">Q</button>${
-          inPlaylist ? '<button data-up title="Move up">↑</button><button data-down title="Move down">↓</button><button data-remove title="Remove from playlist">✕</button>' : ''
+          inPlaylist
+            ? '<button data-up title="Move up">↑</button><button data-down title="Move down">↓</button><button data-remove title="Remove from playlist">✕</button>'
+            : this.view === 'all'
+              ? '<button data-delete title="Remove from library (the file stays on your disk)">✕</button>'
+              : ''
         }</td></tr>`);
     }
     parts.push(`<tr class="spacer"><td colspan="8" style="height:${(n - last) * ROW_H}px"></td></tr>`);
@@ -396,6 +400,12 @@ export class LibraryView {
     } else if (t.dataset.up !== undefined) void lib.moveInPlaylist(this.view, index, index - 1);
     else if (t.dataset.down !== undefined) void lib.moveInPlaylist(this.view, index, index + 1);
     else if (t.dataset.remove !== undefined) void lib.removeFromPlaylist(this.view, index);
+    else if (t.dataset.delete !== undefined) {
+      const rec = lib.tracks.get(id);
+      if (rec && confirm(`Remove "${rec.title}" from the library? Cue points and playlist entries are removed too; the file stays on your disk.`)) {
+        void lib.removeTrack(id);
+      }
+    }
     else this.select(id);
   }
 
@@ -493,8 +503,7 @@ export class LibraryView {
       pad.onchange = async () => {
         if (pad.value === '') return;
         const slot = parseInt(pad.value, 10);
-        await this.app.loopToSampler(slot, id);
-        this.toast(`Pad ${slot + 1}: ${this.app.looplab.def(id)?.name} (pads mode “Sampler”)`);
+        if (await this.app.loopToSampler(slot, id)) this.toast(`Pad ${slot + 1}: ${this.app.looplab.def(id)?.name} (pads mode “Sampler”)`);
         pad.value = '';
       };
     });

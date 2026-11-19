@@ -32,7 +32,8 @@ export class Deck {
   readonly index: number; // 0 = A, 1 = B
 
   track: DeckTrack | null = null;
-  buffer: AudioBuffer | null = null;
+  /** sample rate + length of the loaded track; the samples themselves live only in the worklet */
+  audio: { sampleRate: number; duration: number } | null = null;
   waveform: WaveformData | null = null;
   grid: Grid | null = null;
 
@@ -113,16 +114,16 @@ export class Deck {
   // ------------------------------------------------------------------ loading
 
   get loaded(): boolean {
-    return this.buffer !== null;
+    return this.audio !== null;
   }
 
   get duration(): number {
-    return this.buffer?.duration ?? 0;
+    return this.audio?.duration ?? 0;
   }
 
   load(track: DeckTrack, buffer: AudioBuffer, saved?: Partial<DeckPersistedState>): void {
     this.track = track;
-    this.buffer = buffer;
+    this.audio = { sampleRate: buffer.sampleRate, duration: buffer.duration };
     this.waveform = null;
     this.grid = null;
     this.loop = null;
@@ -152,7 +153,7 @@ export class Deck {
   unload(): void {
     this.send({ type: 'unload' });
     this.track = null;
-    this.buffer = null;
+    this.audio = null;
     this.waveform = null;
     this.grid = null;
     this.loop = null;
@@ -165,8 +166,8 @@ export class Deck {
 
   /** Current track position in seconds, extrapolated between worklet reports. */
   get time(): number {
-    if (!this.buffer) return 0;
-    const sr = this.buffer.sampleRate;
+    if (!this.audio) return 0;
+    const sr = this.audio.sampleRate;
     const dt = Math.max(0, Math.min(0.1, this.ctx.currentTime - this.status.time));
     let frames = this.status.position + this.status.rate * dt * this.ctx.sampleRate;
     if (this.loopActive && this.loop) {
@@ -265,7 +266,7 @@ export class Deck {
   // ------------------------------------------------------------------ transport
 
   play(): void {
-    if (!this.buffer) return;
+    if (!this.audio) return;
     if (this.time >= this.duration - 0.01) return;
     this.send({ type: 'play' });
     this.status = { ...this.status, playing: true };
@@ -284,9 +285,9 @@ export class Deck {
   }
 
   seek(sec: number): void {
-    if (!this.buffer) return;
+    if (!this.audio) return;
     sec = clamp(sec, 0, this.duration);
-    const frame = sec * this.buffer.sampleRate;
+    const frame = sec * this.audio.sampleRate;
     this.send({ type: 'seek', frame });
     this.status = { ...this.status, position: frame, time: this.ctx.currentTime };
     this.emit();
@@ -298,7 +299,7 @@ export class Deck {
 
   /** CDJ-style cue button. */
   cueDown(): void {
-    if (!this.buffer) return;
+    if (!this.audio) return;
     if (this.playing && !this.cueHeld) {
       // return to cue and stop
       this.pause();
@@ -333,7 +334,7 @@ export class Deck {
   }
 
   hotcueDown(i: number): void {
-    if (!this.buffer || i < 0 || i >= HOTCUE_COUNT) return;
+    if (!this.audio || i < 0 || i >= HOTCUE_COUNT) return;
     const pos = this.hotcues[i];
     if (pos === null) {
       this.hotcues[i] = this.q(this.time);
@@ -372,17 +373,17 @@ export class Deck {
   }
 
   private applyLoop(): void {
-    if (!this.buffer || !this.loop || !this.loopActive) {
+    if (!this.audio || !this.loop || !this.loopActive) {
       this.send({ type: 'loopOff' });
       return;
     }
-    const sr = this.buffer.sampleRate;
+    const sr = this.audio.sampleRate;
     this.send({ type: 'loop', start: this.loop.start * sr, end: this.loop.end * sr });
   }
 
   /** Auto loop of `beats` beats starting at the current (quantized) position. Toggles off if same. */
   beatloop(beats: number): void {
-    if (!this.buffer) return;
+    if (!this.audio) return;
     if (this.loopActive && this.loop?.beats === beats) {
       this.exitLoop();
       return;
@@ -403,14 +404,14 @@ export class Deck {
   }
 
   loopIn(): void {
-    if (!this.buffer) return;
+    if (!this.audio) return;
     this.pendingLoopIn = this.q(this.time);
     if (this.loopActive) this.exitLoop();
     this.emit();
   }
 
   loopOut(): void {
-    if (!this.buffer) return;
+    if (!this.audio) return;
     const start = this.pendingLoopIn ?? this.loop?.start;
     if (start === undefined || start === null) return;
     const end = this.q(this.time);
@@ -458,7 +459,7 @@ export class Deck {
 
   /** Jump by a number of beats (negative = back). Moves an active loop along. */
   beatjump(beats: number): void {
-    if (!this.buffer) return;
+    if (!this.audio) return;
     const d = beats * this.beatLen();
     if (this.loop && this.loopActive) {
       this.loop = { ...this.loop, start: this.loop.start + d, end: this.loop.end + d };
@@ -510,7 +511,7 @@ export class Deck {
 
   /** Outer ring: pitch bend when playing, fine scrub when paused. */
   jogBend(ticks: number): void {
-    if (!this.buffer) return;
+    if (!this.audio) return;
     if (this.playing) {
       this.send({ type: 'bend', value: clamp(ticks * 0.01, -0.5, 0.5) });
       if (this.bendTimer !== null) clearTimeout(this.bendTimer);

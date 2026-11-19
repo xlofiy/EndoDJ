@@ -81,6 +81,13 @@ export class LibraryDB {
     return req(this.store(store).getAll() as IDBRequest<T[]>);
   }
 
+  /** All [key, value] pairs of an out-of-line-key store, in one transaction. */
+  async entries<T>(store: string): Promise<[IDBValidKey, T][]> {
+    const s = this.store(store);
+    const [keys, values] = await Promise.all([req(s.getAllKeys()), req(s.getAll() as IDBRequest<T[]>)]);
+    return keys.map((k, i) => [k, values[i]]);
+  }
+
   get<T>(store: string, key: IDBValidKey): Promise<T | undefined> {
     return req(this.store(store).get(key) as IDBRequest<T | undefined>);
   }
