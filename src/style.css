@@ -594,7 +594,7 @@ dialog {
 }
 canvas.zoom {
   width: 100%;
-  height: 56px;
+  height: 68px;
   display: block;
   border-radius: var(--r);
   background: #020c1a;

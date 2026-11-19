@@ -12,6 +12,12 @@ function waveColor(low: number, alpha = 1): string {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
+const barLabels: string[] = [];
+/** cached so the per-frame grid drawing does not allocate strings */
+function barLabel(n: number): string {
+  return (barLabels[n] ??= String(n));
+}
+
 /** Resize a canvas' backing store to its CSS size × devicePixelRatio. Returns true if resized. */
 export function fitCanvas(c: HTMLCanvasElement): boolean {
   const dpr = window.devicePixelRatio || 1;
@@ -29,6 +35,7 @@ export function fitCanvas(c: HTMLCanvasElement): boolean {
 export class OverviewView {
   private cache = document.createElement('canvas');
   private cachedFor: unknown = null;
+  private cachedGrid: unknown = null;
 
   constructor(readonly canvas: HTMLCanvasElement, private deck: Deck) {
     canvas.addEventListener('pointerdown', (e) => {
@@ -64,6 +71,12 @@ export class OverviewView {
       g.fillStyle = waveColor(low);
       g.fillRect(x, mid - h, 1, h * 2);
     }
+    // a tick every 8 bars (32 beats) shows the phrase structure
+    if (deck.grid) {
+      g.fillStyle = 'rgba(255,196,64,0.8)';
+      const phrase = (32 * 60) / deck.grid.bpm;
+      for (let t = deck.grid.firstBeat; t < deck.duration; t += phrase) g.fillRect(Math.round((t / deck.duration) * W), H - H * 0.22, 1, H * 0.22);
+    }
   }
 
   private last = '';
@@ -71,10 +84,11 @@ export class OverviewView {
   draw(): void {
     const { canvas, deck } = this;
     const resized = fitCanvas(canvas);
-    const cacheStale = resized || this.cachedFor !== deck.waveform;
+    const cacheStale = resized || this.cachedFor !== deck.waveform || this.cachedGrid !== deck.grid;
     if (cacheStale) {
       this.renderCache();
       this.cachedFor = deck.waveform;
+      this.cachedGrid = deck.grid;
     }
     // skip the redraw when nothing visible changed (paused decks cost nothing)
     const px = deck.duration ? Math.round((deck.time / deck.duration) * canvas.width) : -1;
@@ -178,21 +192,6 @@ export class ZoomView {
       g.fillRect((deck.loop.start - t0) * pxPerSec, 0, (deck.loop.end - deck.loop.start) * pxPerSec, H);
     }
 
-    // beat grid
-    if (deck.grid) {
-      const beat = 60 / deck.grid.bpm;
-      const first = Math.ceil((t0 - deck.grid.firstBeat) / beat);
-      for (let i = first; ; i++) {
-        const bt = timeOfBeat(deck.grid, i);
-        if (bt > t + trackSpan) break;
-        if (bt < 0) continue;
-        const x = (bt - t0) * pxPerSec;
-        const bar = ((i % 4) + 4) % 4 === 0;
-        g.fillStyle = bar ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.15)';
-        g.fillRect(Math.round(x), 0, bar ? 2 : 1, H);
-      }
-    }
-
     // waveform
     if (wf) {
       const binsPerPx = wf.binsPerSec / pxPerSec;
@@ -217,6 +216,32 @@ export class ZoomView {
       g.fillStyle = '#8a96a8';
       g.font = `${12 * (window.devicePixelRatio || 1)}px system-ui`;
       g.fillText('Analysing…', 10, 16 * (window.devicePixelRatio || 1));
+    }
+
+    // beat grid on top of the waveform: beat ticks, bar lines with numbers, phrase (8-bar) lines
+    if (deck.grid) {
+      const dpr = window.devicePixelRatio || 1;
+      const beat = 60 / deck.grid.bpm;
+      const tick = Math.round(H * 0.16);
+      g.font = `bold ${10 * dpr}px system-ui`;
+      for (let i = Math.max(0, Math.ceil((t0 - deck.grid.firstBeat) / beat)); ; i++) {
+        const bt = timeOfBeat(deck.grid, i);
+        if (bt > t + trackSpan) break;
+        const x = Math.round((bt - t0) * pxPerSec);
+        if (i % 4) {
+          g.fillStyle = 'rgba(255,255,255,0.1)';
+          g.fillRect(x, tick, 1, H - 2 * tick);
+          g.fillStyle = 'rgba(255,255,255,0.75)';
+          g.fillRect(x, 0, 1, tick);
+          g.fillRect(x, H - tick, 1, tick);
+          continue;
+        }
+        const bar = i / 4;
+        const phrase = bar % 8 === 0;
+        g.fillStyle = phrase ? 'rgba(255,196,64,0.95)' : 'rgba(255,255,255,0.7)';
+        g.fillRect(x - 1, 0, phrase ? 3 : 2, H);
+        g.fillText(barLabel(bar + 1), x + 4, H - 4 * dpr);
+      }
     }
 
     // cue markers

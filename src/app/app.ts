@@ -153,18 +153,20 @@ export class App {
         else bmp?.close();
       });
     }
-    if (rec.bpm > 0) deck.setAnalysis({ bpm: rec.bpm, firstBeat: rec.firstBeat }, null);
+    // read once: background analysis may fill in rec.bpm while we wait below
+    const bpmKnown = rec.bpm > 0;
+    if (bpmKnown) deck.setAnalysis({ bpm: rec.bpm, firstBeat: rec.firstBeat }, null);
     const keyKnown = rec.key !== undefined;
     if (keyKnown) deck.setKey(parseKey(rec.key));
-    const res = await this.analyse(buffer, rec.bpm > 0, keyKnown);
+    const res = await this.analyse(buffer, bpmKnown, keyKnown);
     if (seq !== this.loadSeq[deckIndex]) return true;
-    deck.setAnalysis(rec.bpm > 0 ? null : { bpm: res.bpm, firstBeat: res.firstBeat }, res.waveform);
+    deck.setAnalysis(bpmKnown ? null : { bpm: res.bpm, firstBeat: res.firstBeat }, res.waveform);
     const patch: Parameters<Library['update']>[1] = { duration: buffer.duration };
     if (!keyKnown) {
       patch.key = res.key ?? '';
       deck.setKey(parseKey(res.key));
     }
-    if (rec.bpm <= 0 && res.bpm > 0) {
+    if (!bpmKnown && res.bpm > 0) {
       res.bpm = withNameHint(res.bpm, rec.fileName);
       deck.setAnalysis({ bpm: res.bpm, firstBeat: res.firstBeat }, null);
       patch.bpm = res.bpm;
