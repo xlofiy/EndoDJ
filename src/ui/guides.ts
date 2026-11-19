@@ -432,8 +432,13 @@ export const GUIDES: Guide[] = [
     body: `<ul>
       <li>Search finds titles, artists and BPMs. Click a column header to sort (Key sorts around the Camelot wheel).</li>
       <li><b>+ New playlist</b> makes a setlist. Drag tracks onto it from All tracks, and reorder with ↑ ↓.</li>
-      <li><b>Q</b> adds a track to the Automix queue. Turn on <b>Automix</b> in the top bar and EndoDJ mixes the queue
-        for you, with matched tempo and a crossfade.</li>
+      <li><b>Folders</b> lists the sub-folders of your music folder (your genres). Click one to see only its tracks.</li>
+      <li><b>Q</b> adds a track to the Automix queue. Open <b>Automix queue</b> and switch <b>Automix on</b>: EndoDJ mixes
+        the queue for you, with matched tempo and a crossfade.</li>
+      <li><b>Auto-set</b> (in the Automix queue) builds a set from a folder: it starts slow, then picks the best tempo and
+        key match each time, adds Loop Lab drum loops as bridges where two tracks clash, and starts Automix.</li>
+      <li><b>Suggestions</b> lists the tracks that mix best after the one playing (or selected), with the reason, and the
+        Loop Lab loops of that folder's genre that fit its key.</li>
       <li>History lists everything you played this session. Export it as your setlist.</li>
       <li>The <b>Layout</b> button (top bar) or the bar above the song list gives the list more room.</li>
     </ul>`,

@@ -1332,3 +1332,46 @@ body.lowfx .cloud,
 body.lowfx .sun::after {
   display: none;
 }
+
+/* second toolbar row: Automix controls / suggestion seed */
+#lib-subbar {
+  display: flex;
+  gap: 8px;
+  padding: 6px 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+#lib-subbar[hidden] {
+  display: none;
+}
+#lib-subbar label {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+#lib-subbar input[type='number'] {
+  width: 52px;
+}
+#lib-subbar .sep {
+  width: 1px;
+  height: 18px;
+  background: var(--line);
+}
+.loop-chip {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+  padding: 2px 2px 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.loop-chip button {
+  padding: 0 6px;
+  min-height: 0;
+}
+#lib-table .why {
+  opacity: 0.6;
+  font-size: 11px;
+}

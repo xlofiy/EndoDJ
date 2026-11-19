@@ -17,6 +17,7 @@ import { withNameHint } from '../loops/catalog';
 import { parseKey } from '../audio/key';
 import { extractArtwork, type Artwork } from '../library/artwork';
 import { Sampler } from './sampler';
+import { LOOP_PREFIX } from './suggest';
 
 export const BEATLOOP_PAD_SIZES = [0.25, 0.5, 1, 2, 4, 8, 16, 32];
 export const BEATJUMP_PAD_SIZES = [-1, 1, -2, 2, -4, 4, -8, 8];
@@ -119,6 +120,7 @@ export class App {
   }
 
   async loadTrack(deckIndex: number, trackId: string, opts: { force?: boolean } = {}): Promise<boolean> {
+    if (trackId.startsWith(LOOP_PREFIX)) return this.loadLoop(deckIndex, trackId.slice(LOOP_PREFIX.length));
     const deck = this.engine.decks[deckIndex];
     const rec = this.library.tracks.get(trackId);
     if (!rec) return false;
@@ -243,7 +245,7 @@ export class App {
       return false;
     }
     if (seq !== this.loadSeq[deckIndex] || deck.playing) return false;
-    deck.load({ id: `loop:${loopId}`, title: def.name, artist: `${def.genre} · Loop Lab` }, buffer);
+    deck.load({ id: LOOP_PREFIX + loopId, title: def.name, artist: `${def.genre} · Loop Lab` }, buffer);
     this.loggedPlay[deckIndex] = null;
     deck.setKey(parseKey(def.key));
     const other = this.engine.otherDeck(deck);

@@ -322,6 +322,14 @@ export class Library {
     this.emit();
   }
 
+  async setPlaylist(id: string, trackIds: string[]): Promise<void> {
+    const p = this.playlist(id);
+    if (!p) return;
+    p.trackIds = trackIds;
+    await this.db.put('playlists', p);
+    this.emit();
+  }
+
   async removeFromPlaylist(id: string, index: number): Promise<void> {
     const p = this.playlist(id);
     if (!p) return;

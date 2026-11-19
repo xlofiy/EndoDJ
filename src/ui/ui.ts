@@ -546,7 +546,6 @@ export class UI {
     set($<HTMLInputElement>('#fx-level'), String(eng.fx.level));
     setClass($('#fx-on'), 'on', eng.fx.enabled);
     set($<HTMLInputElement>('#master-level'), String(eng.masterLevel));
-    setClass($('#automix-btn'), 'on', this.app.automix.enabled);
   }
 
   private drawMeter(canvas: HTMLCanvasElement, level: number, horizontal = false): void {
@@ -589,10 +588,6 @@ export class UI {
     layout.onclick = () => this.setPrefs({ compact: !this.prefs.compact });
     const ml = $<HTMLInputElement>('#master-level');
     ml.oninput = () => eng.setMasterLevel(parseFloat(ml.value));
-    $('#automix-btn').onclick = () => {
-      this.app.automix.setEnabled(!this.app.automix.enabled);
-      this.syncControls();
-    };
     $('#rec-btn').onclick = async () => {
       if (eng.recording) {
         const blob = await eng.stopRecording();
@@ -928,7 +923,6 @@ export class UI {
       </select></div>
       <p class="muted">Device reports ${eng.maxOutputChannels} output channels. Sample rate ${eng.ctx.sampleRate} Hz, base latency ${Math.round(eng.ctx.baseLatency * 1000)} ms.</p>
       <h3>Mixing</h3>
-      <div class="field"><span>Automix crossfade</span><input id="am-fade" type="number" min="2" max="60" step="1" value="${this.app.automix.fadeSeconds}" /> seconds</div>
       <div class="field"><span>Sampler volume</span><input id="smp-vol" type="range" min="0" max="1" step="0.01" value="${this.app.sampler.volume}" /></div>`;
     const mode = $<HTMLSelectElement>('#out-mode', body);
     mode.value = eng.outputMode;
@@ -956,10 +950,6 @@ export class UI {
         }
       };
     }
-    const fade = $<HTMLInputElement>('#am-fade', body);
-    fade.onchange = () => {
-      this.app.automix.fadeSeconds = Math.max(2, Math.min(60, parseFloat(fade.value) || 12));
-    };
     const vol = $<HTMLInputElement>('#smp-vol', body);
     vol.oninput = () => this.app.sampler.setVolume(parseFloat(vol.value));
   }
