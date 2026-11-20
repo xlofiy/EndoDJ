@@ -10,7 +10,6 @@ import type { TrackRecord } from '../library/db';
 import { formatDuration, toCSV, toM3U, toText, type ExportTrack } from '../library/export';
 import { AUTOMIX_ID, HISTORY_ID, Library } from '../library/library';
 import { folderTree, inFolder, type Folder } from '../library/folders';
-import { SAMPLER_SLOTS } from '../app/sampler';
 
 export const LOOPLAB_VIEW = '__looplab__';
 /** view id prefix for a music sub-folder */
@@ -344,10 +343,12 @@ export class LibraryView {
       <span class="break"></span>`;
     if (this.amTab === 'queue') {
       const folders = folderTree([...lib.tracks.values()].map((t) => t.path)).filter((f) => f.depth < 3);
-      const opt = (f: Folder) => `<option value="${esc(f.path)}" ${f.path === this.setFolder ? 'selected' : ''}>${'  '.repeat(f.depth)}${esc(f.name)} (${f.count})</option>`;
+      const opt = (f: Folder, sel: string) => `<option value="${esc(f.path)}" ${f.path === sel ? 'selected' : ''}>${'  '.repeat(f.depth)}${esc(f.name)} (${f.count})</option>`;
       html += `
         <label title="Builds a set from tracks in this folder: starts slow, then picks the best tempo / key match each time">Auto-set from
-          <select id="as-folder"><option value="">All tracks</option>${folders.map(opt).join('')}</select></label>
+          <select id="as-folder"><option value="">All tracks</option>${folders.map((f) => opt(f, this.setFolder)).join('')}</select></label>
+        <label title="Mix in a second folder / genre: the set alternates between the two">mixed with
+          <select id="as-folder2"><option value="">—</option>${folders.map((f) => opt(f, this.setFolder2)).join('')}</select></label>
         <label><input id="as-len" type="number" min="2" max="60" step="1" value="${this.setLength}" /> tracks</label>
         <label title="Play a drum loop of the folder's genre over transitions whose key or tempo do not match well"><input id="as-loops" type="checkbox" ${this.setLoops ? 'checked' : ''} /> Loop Lab layers</label>
         <button id="as-build" title="Fills the queue, puts track 1 on deck A and track 2 on deck B, saves the set and starts Automix">Build set &amp; play</button>`;
@@ -403,11 +404,13 @@ export class LibraryView {
     if (this.amTab === 'queue') {
       const folder = el<HTMLSelectElement>('#as-folder');
       folder.onchange = () => (this.setFolder = folder.value);
+      const folder2 = el<HTMLSelectElement>('#as-folder2');
+      folder2.onchange = () => (this.setFolder2 = folder2.value);
       const len = el<HTMLInputElement>('#as-len');
       len.onchange = () => (this.setLength = Math.max(2, Math.min(60, parseInt(len.value, 10) || 8)));
       const loops = el<HTMLInputElement>('#as-loops');
       loops.onchange = () => (this.setLoops = loops.checked);
-      el('#as-build').onclick = () => void this.autoSet(this.setFolder);
+      el('#as-build').onclick = () => void this.autoSet(this.setFolder, this.setFolder2);
     }
   }
 
@@ -439,15 +442,21 @@ export class LibraryView {
   }
 
   private setFolder = '';
+  private setFolder2 = '';
   private setLength = 8;
   private setLoops = true;
 
   /** Build a set from a folder, put it in the Automix queue and start Automix. */
-  private async autoSet(folder: string): Promise<void> {
+  /** Build a new set (different on every press) from one folder, or alternating between two. */
+  private async autoSet(folder: string, folder2: string): Promise<void> {
     const lib = this.app.library;
-    const tracks = [...lib.tracks.values()].filter((t) => (!folder || inFolder(t.path, folder)) && lib.isAvailable(t.id));
-    const loops = this.setLoops ? loopsFor(genreOf(`${folder}/x`), undefined) : [];
-    const set = buildSet(tracks.map(mixTrack), this.setLength, loops);
+    const folders = folder2 && folder2 !== folder ? [folder, folder2] : [folder];
+    const tracks = [...lib.tracks.values()].filter((t) => lib.isAvailable(t.id));
+    const pool = folders.flatMap((f) => tracks.filter((t) => !f || inFolder(t.path, f)).map((t) => ({ ...mixTrack(t), group: f })));
+    const seen = new Set<string>(); // a track in both folders counts once
+    const unique = pool.filter((t) => !seen.has(t.id) && seen.add(t.id));
+    const loops = this.setLoops ? folders.flatMap((f) => loopsFor(genreOf(`${f}/x`), undefined)) : [];
+    const set = buildSet(unique, this.setLength, loops);
     if (!set.length) {
       this.toast('No analysed tracks there yet. Wait for the BPM analysis to finish (next to the search box).', true);
       return;
@@ -455,14 +464,11 @@ export class LibraryView {
     const queue = lib.playlist(AUTOMIX_ID)!;
     if (queue.trackIds.length && !confirm(`Replace the ${queue.trackIds.length} items in the Automix queue with the new set?`)) return;
     if (this.app.engine.decks.some((d) => d.playing) && !confirm('A deck is playing. The set will start on the other deck and mix in from what is playing. Continue?')) return;
-    const folderName = folder ? folder.slice(folder.lastIndexOf('/') + 1) : 'All tracks';
-    const saved = await lib.createPlaylist(`Auto-set · ${folderName} · ${new Date().toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`);
-    await lib.addToPlaylist(saved.id, [...set]);
     await lib.setPlaylist(AUTOMIX_ID, set);
     this.amTab = 'queue';
     const nLoops = set.filter((id) => id.startsWith(LOOP_PREFIX)).length;
     if (!(await this.app.automix.startQueue())) return this.toast('Could not load the set onto the decks.', true);
-    this.toast(`Auto-set: ${set.length - nLoops} tracks${nLoops ? ` + ${nLoops} loop layers` : ''}, saved under Playlists. Track 1 on A, track 2 on B.`);
+    this.toast(`Auto-set: ${set.length - nLoops} tracks${nLoops ? ` + ${nLoops} loop layers` : ''}, track 1 on A, track 2 on B. Save set keeps it.`);
   }
 
   private renderToolbar(): void {
@@ -682,37 +688,34 @@ export class LibraryView {
       (l) => (this.genre === 'All' || l.genre === this.genre) && (!q || `${l.name} ${l.genre} ${l.kind} ${l.bpm}`.toLowerCase().includes(q)),
     );
     const previewing = this.app.looplab.previewing;
+    const slots = this.app.sampler.slots;
+    const row = (l: (typeof LOOPS)[number]) => `
+      <div class="ll-row ${previewing === l.id ? 'playing' : ''}" data-loop="${l.id}" draggable="true" title="Drag onto a pad above, or onto a deck">
+        <button data-act="preview" class="pv" title="Preview in the headphones">${previewing === l.id ? '■' : '▶'}</button>
+        <span class="name">${esc(l.name)}</span>
+        <span class="meta">${l.kind === 'sfx' ? 'one-shot' : l.kind} · ${l.bpm > 0 ? `${l.bpm} BPM · ${l.bars} bars` : `${loopLengthSeconds(l).toFixed(1)} s`}${l.key ? ` · ${keyCell(l.key)}` : ''}</span>
+        <span class="src">${l.credit ? `<a href="${esc(l.credit.url)}" target="_blank" rel="noopener noreferrer" title="CC0 — ${esc(l.credit.title)}">${esc(l.credit.author)} ↗</a>` : 'EndoDJ'}</span>
+        <span class="acts"><button data-act="deck" data-deck="0" title="Load onto deck A">A</button><button data-act="deck" data-deck="1" title="Load onto deck B">B</button><button data-act="pad" title="Put on the next free sampler pad">+ Pad</button></span>
+      </div>`;
+    const sections = GENRES.map((g) => ({ g, list: loops.filter((l) => l.genre === g) })).filter((x) => x.list.length);
     root.innerHTML = `
-      <div class="genres">${(['All', ...GENRES] as const)
-        .map((g) => `<button data-genre="${g}" class="${this.genre === g ? 'on' : ''}">${g === 'FX' ? 'FX & one-shots' : g}</button>`)
-        .join('')}
-        <button id="import-loops" title="Import your own loop pack (WAV/MP3/…) into the playlist “${MY_LOOPS_NAME}”">＋ Import loop pack</button></div>
-      <p class="note">CC0 loops &amp; FX from OpenGameArt plus loops synthesised by EndoDJ — all free to use in mixes, streams and
-        releases. Load a loop onto a deck: it loops seamlessly on an exact beat grid and automatically matches the playing deck's
-        <b>BPM and key</b> (key lock on, so you can still change tempo and key separately). ▶ previews in your headphones
-        (or on the master when no headphone output is set up).</p>
-      <div class="grid">${loops
+      <div class="ll-head">
+        <div class="genres">${(['All', ...GENRES] as const)
+          .map((g) => `<button data-genre="${g}" class="${this.genre === g ? 'on' : ''}">${g === 'FX' ? 'FX' : g}</button>`)
+          .join('')}<button id="import-loops" title="Import your own loop pack (WAV/MP3/…) into the playlist “${MY_LOOPS_NAME}”">＋ Import</button></div>
+        <div class="ll-pads" title="Sampler pads: set a deck's PADS to Sampler to play them from the deck (or the controller)">
+          <span class="label">PADS</span>${slots
+            .map((sl, i) => `<button data-pad="${i}" class="${sl ? 'set' : ''}" title="${sl ? `Pad ${i + 1}: ${esc(sl.name)} — click to play` : `Pad ${i + 1}: empty — drop a loop here`}"><b>${i + 1}</b>${sl ? esc(sl.name) : ''}</button>`)
+            .join('')}
+        </div>
+      </div>
+      ${sections
         .map(
-          (l) => `<div class="card ${previewing === l.id ? 'playing' : ''}" data-loop="${l.id}">
-            <div class="name">${esc(l.name)}</div>
-            <div class="meta"><span class="tag" style="background:${GENRE_COLORS[l.genre]}">${l.genre}</span>${l.kind}
-              · ${l.bpm > 0 ? `${l.bpm} BPM · ${l.bars} bars` : `${loopLengthSeconds(l).toFixed(1)} s`}${l.key ? ` · <b>${keyCell(l.key)}</b>` : ''}</div>
-            <div class="credit">${
-              l.credit
-                ? `CC0 · <a href="${esc(l.credit.url)}" target="_blank" rel="noopener noreferrer" title="${esc(l.credit.title)}">${esc(l.credit.author)} ↗</a>`
-                : 'Original · EndoDJ (MIT)'
-            }</div>
-            <div class="actions">
-              <button data-act="preview">${previewing === l.id ? '■ Stop' : '▶ Preview'}</button>
-              <button data-act="deck" data-deck="0" title="Load onto deck A">→ A</button>
-              <button data-act="deck" data-deck="1" title="Load onto deck B">→ B</button>
-              <select data-act="pad" title="Put on a sampler pad"><option value="">→ Pad…</option>${Array.from(
-                { length: SAMPLER_SLOTS },
-                (_, i) => `<option value="${i}">Pad ${i + 1}</option>`,
-              ).join('')}</select>
-            </div></div>`,
+          ({ g, list }) => `<section><h4><i style="background:${GENRE_COLORS[g]}"></i>${g === 'FX' ? 'FX &amp; one-shots' : g}<span class="count">${list.length}</span></h4>${list.map(row).join('')}</section>`,
         )
-        .join('')}</div>`;
+        .join('')}
+      <p class="note">Loops are CC0 (credited) or made by EndoDJ — free to use in mixes, streams and releases. Loaded on a deck they
+        follow the playing deck's BPM and key.</p>`;
     root.querySelectorAll<HTMLButtonElement>('[data-genre]').forEach((b) => {
       b.onclick = () => {
         this.genre = b.dataset.genre as Genre | 'All';
@@ -720,19 +723,43 @@ export class LibraryView {
       };
     });
     root.querySelector<HTMLButtonElement>('#import-loops')!.onclick = () => this.importLoopPack();
-    root.querySelectorAll<HTMLElement>('.card').forEach((card) => {
-      const id = card.dataset.loop!;
-      card.querySelector<HTMLButtonElement>('[data-act="preview"]')!.onclick = () =>
+    const toPad = async (slot: number, id: string) => {
+      if (await this.app.loopToSampler(slot, id)) {
+        this.toast(`Pad ${slot + 1}: ${this.app.looplab.def(id)?.name}. Set a deck's PADS to Sampler to play it.`);
+        this.renderLoopLab();
+      }
+    };
+    root.querySelectorAll<HTMLButtonElement>('[data-pad]').forEach((b) => {
+      const slot = parseInt(b.dataset.pad!, 10);
+      b.onclick = () => this.app.sampler.trigger(slot);
+      b.addEventListener('dragover', (e) => {
+        if (e.dataTransfer?.types.includes('application/x-endodj-loop')) {
+          e.preventDefault();
+          b.classList.add('drop');
+        }
+      });
+      b.addEventListener('dragleave', () => b.classList.remove('drop'));
+      b.addEventListener('drop', (e) => {
+        b.classList.remove('drop');
+        const id = e.dataTransfer?.getData('application/x-endodj-loop');
+        if (id) {
+          e.preventDefault();
+          void toPad(slot, id);
+        }
+      });
+    });
+    root.querySelectorAll<HTMLElement>('.ll-row').forEach((r) => {
+      const id = r.dataset.loop!;
+      r.addEventListener('dragstart', (e) => e.dataTransfer?.setData('application/x-endodj-loop', id));
+      r.querySelector<HTMLButtonElement>('[data-act="preview"]')!.onclick = () =>
         void this.app.looplab.togglePreview(id).catch((e: Error) => this.toast(e.message, true));
-      card.querySelectorAll<HTMLButtonElement>('[data-act="deck"]').forEach((b) => {
+      r.querySelectorAll<HTMLButtonElement>('[data-act="deck"]').forEach((b) => {
         b.onclick = () => void this.app.loadLoop(parseInt(b.dataset.deck!, 10), id);
       });
-      const pad = card.querySelector<HTMLSelectElement>('[data-act="pad"]')!;
-      pad.onchange = async () => {
-        if (pad.value === '') return;
-        const slot = parseInt(pad.value, 10);
-        if (await this.app.loopToSampler(slot, id)) this.toast(`Pad ${slot + 1}: ${this.app.looplab.def(id)?.name} (pads mode “Sampler”)`);
-        pad.value = '';
+      r.querySelector<HTMLButtonElement>('[data-act="pad"]')!.onclick = () => {
+        const free = slots.findIndex((sl) => !sl);
+        if (free < 0) this.toast('All 8 pads are full. Drag the loop onto a pad to replace it.', true);
+        else void toPad(free, id);
       };
     });
   }

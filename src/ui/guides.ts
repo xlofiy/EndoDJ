@@ -446,11 +446,13 @@ export const GUIDES: Guide[] = [
       <li><b>Folders</b> lists the sub-folders of your music folder (your genres). Click one to see only its tracks.</li>
       <li><b>Q</b> adds a track to the Automix queue. Open <b>Automix queue</b> and switch <b>Automix on</b>: with both
         decks stopped, track 1 goes on deck A and track 2 on deck B, and the mix alternates from there (odd tracks on A,
-        even tracks on B), with matched tempo and a crossfade.</li>
-      <li><b>Auto-set</b> builds a set from a folder: it starts slow, then picks the best tempo and key match each time,
-        loads it onto A and B, saves it under Playlists and starts Automix.</li>
-      <li><b>Layers</b>: a Loop Lab loop in the queue takes no deck. It plays on top of the transition into the track
-        after it, in time with the mix. Auto-set adds drum-loop layers where two tracks clash.</li>
+        even tracks on B), with matched tempo, a crossfade and a bass swap halfway. As soon as a track has finished, the
+        next one is loaded on that deck, so you can always see what plays next.</li>
+      <li><b>Auto-set</b> builds a new set from a folder each time you press it: it starts slow, then picks a good tempo
+        and key match each time, loads it onto A and B and starts Automix. Pick a second folder under <b>mixed with</b>
+        and the set alternates between the two. <b>Save set</b> keeps it.</li>
+      <li><b>Layers</b>: a Loop Lab loop in the queue takes no deck. It comes in with the transition and keeps playing
+        over the next song for 16 bars, in time with the mix. Auto-set adds drum-loop layers.</li>
       <li><b>Suggestions</b> (a tab in the Automix queue) lists the tracks that mix best after deck A or B, with the
         reason, leaving out what is queued or already played, plus loop layers that fit.</li>
       <li><b>Save set</b> keeps the queue as a playlist; <b>Load set</b> puts a saved set back in the queue.</li>

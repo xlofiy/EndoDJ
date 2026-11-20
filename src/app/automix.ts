@@ -13,15 +13,15 @@ import { AUTOMIX_ID } from '../library/library';
 import type { App } from './app';
 import { LOOP_PREFIX } from './suggest';
 
-/** a layer keeps playing this many bars after the crossfade has finished */
-const LAYER_TAIL_BARS = 4;
-const LAYER_GAIN = 0.7;
+/** a layer keeps playing over the incoming song for this many bars after the crossfade */
+const LAYER_TAIL_BARS = 16;
+const LAYER_GAIN = 0.55;
 
 export class Automix {
   enabled = false;
   /** crossfade length in seconds of real time */
   fadeSeconds = 12;
-  private transition: { from: Deck; to: Deck; start: number; startX: number } | null = null;
+  private transition: { from: Deck; to: Deck; start: number; startX: number; lows: [number, number]; swapped: boolean } | null = null;
   private loading = false;
   private timer: number | null = null;
   /** per deck: Loop Lab layer to play when that deck comes in */
@@ -37,6 +37,7 @@ export class Automix {
     if (!on && this.timer !== null) {
       clearInterval(this.timer);
       this.timer = null;
+      if (this.transition) for (const i of [0, 1]) this.app.engine.strips[i].set('low', this.transition.lows[i]);
       this.transition = null;
       this.stopLayer();
     }
@@ -163,16 +164,27 @@ export class Automix {
     const [a, b] = eng.decks;
 
     if (this.transition) {
-      const { from, to, start, startX } = this.transition;
+      const tr = this.transition;
+      const { from, to, start, startX, lows } = tr;
       const t = Math.min(1, (eng.ctx.currentTime - start) / this.fadeSeconds);
       const target = to.index === 0 ? 0 : 1;
       eng.setCrossfader(startX + (target - startX) * t);
+      // bass swap halfway, like a DJ: never two kick drums / bass lines at full level at once
+      if (t >= 0.5 && !tr.swapped) {
+        tr.swapped = true;
+        eng.strips[from.index].set('low', 0);
+        eng.strips[to.index].set('low', lows[to.index]);
+      }
       this.app.onControl?.();
       if (t >= 1 || !from.playing) {
         eng.setCrossfader(target);
         from.pause();
+        eng.strips[from.index].set('low', lows[from.index]);
+        eng.strips[to.index].set('low', lows[to.index]);
         this.transition = null;
         this.app.onControl?.();
+        // the finished deck gets the next track right away, so it is clear what plays next
+        if (this.queueLength() > 0) await this.loadNext(from);
       }
       return;
     }
@@ -206,7 +218,9 @@ export class Automix {
       eng.strips[to.index].set('volume', Math.max(eng.strips[to.index].values.volume, 0.8));
       to.play();
       if (to.grid && from.grid) to.alignPhase(from);
-      this.transition = { from, to, start: eng.ctx.currentTime, startX: eng.crossfader };
+      const lows: [number, number] = [eng.strips[0].values.low, eng.strips[1].values.low];
+      eng.strips[to.index].set('low', 0); // incoming bass stays out until the swap
+      this.transition = { from, to, start: eng.ctx.currentTime, startX: eng.crossfader, lows, swapped: false };
       this.playLayer(to, from);
     }
   }

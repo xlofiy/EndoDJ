@@ -96,6 +96,11 @@ FX → history → automix crossfade), with no console errors:
   Automix view, seeded from deck A/B (excludes decks, queue and history). Auto-sets are saved as
   playlists; Save set / Load set in the Automix bar.
 - **Eurobeat**: 3 CC0 loops (MintoDog, OpenGameArt) + 2 synthesised.
+- **Session 7**: Auto-set is random among near-best picks (new set per press, `rng` injectable for tests), optional
+  second folder (alternates groups), no auto-save; Automix bass-swaps (low EQ) halfway through each blend, layers
+  run 16 bars over the next song, the finished deck loads the next track at once; compact layout keeps 8 small pads;
+  Loop Lab list grouped by genre (FX last) with a sampler-pad strip (+ Pad / drag onto a pad); 11 more loops,
+  12 more FX one-shots (91 sounds).
 - **Fixes**: BPM low-band ripple (40-60 Hz kicks could pull the tempo to 3/4); a track loaded while
   background analysis ran lost its beat grid; Web Audio low/high-pass Q is in dB.
 

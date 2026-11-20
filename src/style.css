@@ -821,8 +821,23 @@ body.platters .deck .pitch {
 }
 
 /* compact layout: the song list gets the room */
-body.compact .deck .perf {
+/* compact: pads stay (one row of 8, smaller), the loop / jump rows go */
+body.compact .deck .perf .row.loops + .row.loops,
+body.compact .deck .partsrow {
   display: none;
+}
+body.compact .deck .pads {
+  grid-template-columns: repeat(8, 1fr);
+  gap: 3px;
+  margin: 3px 0 !important;
+}
+body.compact .deck .pads button {
+  height: 24px;
+  padding: 0 2px;
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 body.compact canvas.zoom {
   height: 42px;
@@ -1084,55 +1099,127 @@ body.compact #mixer .fader input {
 }
 #looplab .note {
   color: var(--muted);
-  margin: 0 0 10px;
-  max-width: 900px;
+  font-size: 11.5px;
+  margin: 12px 2px 0;
 }
-#looplab .grid {
+/* header stays put while the list scrolls */
+#looplab .ll-head {
+  position: sticky;
+  top: -8px;
+  z-index: 1;
+  margin: -8px -10px 4px;
+  padding: 8px 10px 6px;
+  background: #f1f8ff;
+  border-bottom: 1px solid var(--line);
+}
+[data-mode='dark'] #looplab .ll-head {
+  background: #0e2240;
+}
+#looplab .ll-pads {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 8px;
-}
-#looplab .card {
-  padding: 10px 12px;
-  border-radius: var(--r);
-  background: var(--glass);
-  border: 1px solid var(--glass-border);
-  box-shadow: 0 2px 8px rgb(8 56 110 / 0.1);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-#looplab .card.playing {
-  border-color: var(--accent-2);
-  box-shadow: 0 0 0 2px rgb(92 191 30 / 0.35);
-}
-#looplab .card .name {
-  font-weight: 700;
-}
-#looplab .card .meta {
-  color: var(--muted);
-  font-size: 12px;
-}
-#looplab .card .tag {
-  display: inline-block;
-  padding: 0 7px;
-  margin-right: 4px;
-  border-radius: 999px;
-  font-size: 10.5px;
-  font-weight: 700;
-  color: #fff;
-}
-#looplab .card .actions {
-  display: flex;
+  grid-template-columns: auto repeat(8, minmax(0, 1fr));
   gap: 4px;
-  flex-wrap: wrap;
+  align-items: center;
 }
-#looplab .credit {
+#looplab .ll-pads button {
+  height: 28px;
+  padding: 0 6px;
   font-size: 11px;
-  color: var(--muted);
+  justify-content: flex-start;
+  gap: 5px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  border-radius: var(--r-sm);
 }
-#looplab .credit a {
+#looplab .ll-pads button b {
+  opacity: 0.55;
+  margin-right: 5px;
+}
+#looplab .ll-pads button.set {
+  color: #fff;
+  background: linear-gradient(180deg, #5fc4ff, #0d8fd6 55%, #0a7cc0);
+  border-color: rgb(0 60 120 / 0.35);
+  text-shadow: 0 1px 1px rgb(0 0 0 / 0.3);
+}
+#looplab .ll-pads button.drop {
+  outline: 2px dashed var(--accent-2);
+  outline-offset: 1px;
+}
+#looplab section {
+  margin-top: 8px;
+}
+#looplab h4 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 10px 2px 4px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+#looplab h4 i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: inset 0 1px 1px rgb(255 255 255 / 0.6);
+}
+#looplab h4 .count {
+  color: var(--muted);
+  font-weight: 400;
+}
+#looplab .ll-row {
+  display: grid;
+  grid-template-columns: 28px minmax(120px, 1.2fr) minmax(140px, 1.4fr) minmax(70px, 0.6fr) auto;
+  gap: 8px;
+  align-items: center;
+  height: 32px;
+  padding: 0 6px;
+  border-radius: var(--r-sm);
+  border: 1px solid transparent;
+  cursor: grab;
+}
+#looplab .ll-row:nth-child(odd) {
+  background: rgb(255 255 255 / 0.12);
+}
+#looplab .ll-row:hover {
+  background: var(--glass);
+  border-color: var(--glass-border);
+}
+#looplab .ll-row.playing {
+  border-color: var(--accent-2);
+  box-shadow: 0 0 0 2px rgb(92 191 30 / 0.3);
+}
+#looplab .ll-row .pv {
+  width: 26px;
+  height: 24px;
+  padding: 0;
+  border-radius: 50%;
+}
+#looplab .ll-row .name {
+  font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+#looplab .ll-row .meta,
+#looplab .ll-row .src {
+  color: var(--muted);
+  font-size: 11.5px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+#looplab .ll-row .src a {
   color: var(--accent);
+}
+#looplab .ll-row .acts {
+  display: flex;
+  gap: 3px;
+}
+#looplab .ll-row .acts button {
+  height: 24px;
+  padding: 0 8px;
 }
 
 /* ------------------------------------------------------------------ dialogs */

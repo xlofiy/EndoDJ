@@ -5,7 +5,7 @@
  *  - original loops and FX synthesised from code in this repository (MIT).
  * Everything is free to use in mixes, streams and releases.
  */
-import { Canvas, clap, crush, cymbal, hat, kick, noise, snare, sweep, synth, SVF, softClip, TAU, type SynthNote } from './dsp';
+import { Canvas, clap, crush, cymbal, hat, kick, noise, snare, square, sweep, synth, SVF, softClip, TAU, type SynthNote } from './dsp';
 
 export type Genre = 'EDM' | 'Rave' | 'Techno' | 'Eurobeat' | 'Hardstyle' | 'Jersey Club' | 'Scene' | 'Breakcore' | 'Hyperpop' | 'FX';
 export const GENRES: Genre[] = ['EDM', 'Rave', 'Techno', 'Eurobeat', 'Hardstyle', 'Jersey Club', 'Scene', 'Breakcore', 'Hyperpop', 'FX'];
@@ -995,6 +995,217 @@ export const LOOPS: LoopDef[] = [
     },
   },
 
+  // ---------------------------------------------------------------- more loops (set 3)
+  {
+    id: 'edm-future-bass',
+    key: 'F',
+    name: 'Future Bass Chords',
+    genre: 'EDM',
+    kind: 'synth',
+    bpm: 150,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      // F – C – Dm – Bb, wobbly sidechained supersaws (half-time feel)
+      const beat = 60 / bpm;
+      const chords: [number, number[]][] = [[53, MAJOR], [48, MAJOR], [50, MINOR], [46, MAJOR]];
+      const notes: SynthNote[] = [];
+      chords.forEach(([r, iv], bar) => iv.forEach((x) => notes.push({ t: bar * 4 * beat, dur: 4 * beat * 0.95, note: r + 12 + x })));
+      synth(c, notes, { wave: 'supersaw', cutoff: 3500, res: 0.6, detune: 28, gain: 0.45, width: 1, pump: { beat, depth: 0.85 } });
+      synth(c, chords.map(([r], bar) => ({ t: bar * 4 * beat, dur: 4 * beat * 0.95, note: r - 12 })), { wave: 'sine', cutoff: 300, gain: 0.55, pump: { beat, depth: 0.8 } });
+      const st = s16(bpm);
+      pattern('x.........x.....', st, 4, (t) => kick(c, t, { f0: 170, f1: 50, decay: 0.25, drive: 2 }));
+      pattern('........x.......', st, 4, (t, _a, i) => clap(c, t, 1000 + i, 0.8));
+    },
+  },
+  {
+    id: 'edm-progressive-arp',
+    key: 'Am',
+    name: 'Progressive Arp',
+    genre: 'EDM',
+    kind: 'synth',
+    bpm: 126,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      const st = s16(bpm);
+      const arp = [57, 60, 64, 69, 64, 60, 57, 64];
+      const notes: SynthNote[] = [];
+      for (let i = 0; i < 64; i++) notes.push({ t: i * st, dur: st * 0.6, note: arp[i % 8] + ((i >> 4) % 2 ? -4 : 0) });
+      synth(c, notes, { wave: 'saw', cutoff: 1500, envMod: 2500, envDecay: 0.05, res: 0.9, gain: 0.35, width: 0.7 });
+      synth(c, [0, 1, 2, 3].map((b) => ({ t: b * 16 * st, dur: 15 * st, note: b % 2 ? 41 : 45 })), { wave: 'saw', cutoff: 280, gain: 0.5 });
+      pattern('x...x...x...x...', st, 4, (t) => kick(c, t, { f0: 150, f1: 48, decay: 0.24, drive: 1.6 }));
+      pattern('..x...x...x...x.', st, 4, (t, _a, i) => hat(c, t, 1010 + i, { decay: 0.08, gain: 0.25 }));
+    },
+  },
+  {
+    id: 'rave-piano-stabs',
+    key: 'Gm',
+    name: 'Rave Piano Stabs',
+    genre: 'Rave',
+    kind: 'synth',
+    bpm: 135,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      // Gm – Gm – Eb – F, bright piano-like stabs on the off-beats
+      const notes = chordStabs([[55, MINOR], [55, MINOR], [51, MAJOR], [53, MAJOR]], [2, 6, 10, 14], bpm, 0.9);
+      synth(c, notes, { wave: 'tri', cutoff: 6000, envMod: 3000, envDecay: 0.08, gain: 0.5, width: 0.5, release: 0.12 });
+      synth(c, [0, 1, 2, 3].map((b) => ({ t: (b * 16 * 60) / bpm / 4, dur: (15 * 60) / bpm / 4, note: [43, 43, 39, 41][b] })), { wave: 'sine', cutoff: 300, gain: 0.5 });
+      for (let b = 0; b < 16; b++) kick(c, (b * 60) / bpm, { f0: 150, f1: 50, decay: 0.18, drive: 1.6, gain: 0.85 });
+    },
+  },
+  {
+    id: 'techno-rolling-bass',
+    key: 'Am',
+    name: 'Rolling Bass',
+    genre: 'Techno',
+    kind: 'bass',
+    bpm: 128,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      const st = s16(bpm);
+      const notes: SynthNote[] = [];
+      // three 16ths after every kick, the classic rolling bass
+      for (let i = 0; i < 64; i++) if (i % 4) notes.push({ t: i * st, dur: st * 0.7, note: 33 + (i % 16 === 14 ? 7 : 0) });
+      synth(c, notes, { wave: 'saw', cutoff: 350, envMod: 900, envDecay: 0.04, res: 1.2, gain: 0.6, drive: 1.6 });
+      synth(c, chordStabs([[57, MINOR], [57, MINOR], [57, MINOR], [57, MINOR]], [0], bpm, 4), { wave: 'tri', cutoff: 1500, gain: 0.2 });
+      pattern('x...x...x...x...', st, 4, (t) => kick(c, t, { f0: 140, f1: 45, decay: 0.22, drive: 2.5 }));
+      pattern('..x...x...x...x.', st, 4, (t, _a, i) => hat(c, t, 1020 + i, { decay: 0.05, gain: 0.25 }));
+    },
+  },
+  {
+    id: 'techno-minimal-groove',
+    name: 'Minimal Groove',
+    genre: 'Techno',
+    kind: 'drums',
+    bpm: 126,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      const st = s16(bpm);
+      pattern('x...x...x...x...', st, 4, (t) => kick(c, t, { f0: 130, f1: 48, decay: 0.2, drive: 1.4 }));
+      pattern('......x.......x.', st, 4, (t, _a, i) => clap(c, t, 1030 + i, 0.35));
+      pattern('.x.x..x..x.x..x.', st, 4, (t, _a, i) => hat(c, t, 1040 + i, { decay: 0.015, gain: 0.25, pan: Math.sin(i * 1.7) * 0.6 }));
+      pattern('...x.......x....', st, 4, (t, _a, i) => snare(c, t, 1050 + i, { gain: 0.25, tone: 400, decay: 0.03 }));
+    },
+  },
+  {
+    id: 'eurobeat-brass-stabs',
+    key: 'Dm',
+    name: 'Eurobeat Brass Stabs',
+    genre: 'Eurobeat',
+    kind: 'synth',
+    bpm: 158,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      // Dm – Bb – C – Dm, punchy detuned brass on the classic syncopation
+      const notes = chordStabs([[62, MINOR], [58, MAJOR], [60, MAJOR], [62, MINOR]], [0, 3, 6, 10, 12], bpm, 1.2);
+      synth(c, notes, { wave: 'supersaw', cutoff: 2200, envMod: 3500, envDecay: 0.09, res: 0.7, detune: 20, gain: 0.45, width: 0.8 });
+      const st = s16(bpm);
+      const roots = [38, 34, 36, 38];
+      const bass: SynthNote[] = [];
+      for (let bar = 0; bar < 4; bar++) for (let b = 0; b < 4; b++) bass.push({ t: (bar * 16 + b * 4 + 2) * st, dur: st, note: roots[bar] });
+      synth(c, bass, { wave: 'saw', cutoff: 600, gain: 0.45 });
+      pattern('x...x...x...x...', st, 4, (t) => kick(c, t, { f0: 170, f1: 52, decay: 0.18, drive: 1.8, gain: 0.85 }));
+    },
+  },
+  {
+    id: 'hardstyle-raw-kick',
+    name: 'Rawstyle Kick',
+    genre: 'Hardstyle',
+    kind: 'drums',
+    bpm: 155,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      const st = s16(bpm);
+      pattern('x...x...x...x...', st, 4, (t) => kick(c, t, { f0: 400, f1: 60, sweep: 0.015, decay: 0.2, drive: 8, click: 0.8, gain: 0.9 }));
+      pattern('..x...x...x...x.', st, 4, (t, _a, i) => hat(c, t, 1060 + i, { decay: 0.05, gain: 0.3 }));
+    },
+  },
+  {
+    id: 'jersey-club-triplets',
+    name: 'Jersey Triplet Hats',
+    genre: 'Jersey Club',
+    kind: 'drums',
+    bpm: 140,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      const st = s16(bpm);
+      pattern('x...x...x..x..x.', st, 4, (t) => kick(c, t, { f0: 170, f1: 50, decay: 0.16, drive: 2.2 }));
+      pattern('....x.......x...', st, 4, (t, _a, i) => clap(c, t, 1070 + i, 0.7));
+      // hi-hat triplets on every beat
+      const beat = 60 / bpm;
+      for (let b = 0; b < 16; b++) for (let k = 0; k < 3; k++) hat(c, (b + k / 3) * beat, 1080 + b * 3 + k, { decay: 0.02, gain: k ? 0.12 : 0.2 });
+    },
+  },
+  {
+    id: 'scene-blog-house',
+    key: 'Em',
+    name: 'Blog House Stabs',
+    genre: 'Scene',
+    kind: 'synth',
+    bpm: 128,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      const notes = chordStabs([[52, MINOR], [52, MINOR], [48, MAJOR], [50, MAJOR]], [2, 6, 10, 14], bpm, 1.3);
+      synth(c, notes, { wave: 'square', cutoff: 1600, envMod: 2500, envDecay: 0.07, res: 1, gain: 0.45, drive: 2, bits: 8 });
+      synth(c, [0, 1, 2, 3].map((b) => ({ t: (b * 16 * 60) / bpm / 4, dur: (15 * 60) / bpm / 4, note: [40, 40, 36, 38][b] })), { wave: 'square', cutoff: 400, gain: 0.4 });
+      const st = s16(bpm);
+      pattern('x...x...x...x...', st, 4, (t) => kick(c, t, { f0: 180, f1: 50, decay: 0.16, drive: 2.2 }));
+      pattern('....x.......x...', st, 4, (t, _a, i) => clap(c, t, 1090 + i, 0.7));
+    },
+  },
+  {
+    id: 'breakcore-glitch-break',
+    name: 'Glitch Break',
+    genre: 'Breakcore',
+    kind: 'drums',
+    bpm: 175,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      const st = s16(bpm);
+      pattern('x.x.....x.x.x...x.....x...x.x...', st, 4, (t) => kick(c, t, { f0: 160, f1: 50, decay: 0.1, drive: 3 }));
+      pattern('....o..xx..xo..x....o.xxx..o.xxx', st, 4, (t, a, i) => snare(c, t, 1100 + i, { gain: a ? 0.9 : 0.45, tone: 260, decay: 0.06 }));
+      pattern('x.x.x.x.x.x.x.x.', st, 4, (t, _a, i) => hat(c, t, 1110 + i, { decay: 0.015, gain: 0.18 }));
+      for (let i = 0; i < c.L.length; i++) {
+        c.L[i] = crush(softClip(c.L[i], 2), 6);
+        c.R[i] = crush(softClip(c.R[i], 2), 6);
+      }
+    },
+  },
+  {
+    id: 'hyperpop-pluck-lead',
+    key: 'D',
+    name: 'Hyper Pluck Lead',
+    genre: 'Hyperpop',
+    kind: 'synth',
+    bpm: 155,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      const st = s16(bpm);
+      // D – A – Bm – G, bright plucks with an octave-up sparkle
+      const roots = [62, 57, 59, 55];
+      const notes: SynthNote[] = [];
+      for (let bar = 0; bar < 4; bar++)
+        for (const s of [0, 2, 3, 6, 8, 11, 12, 14]) {
+          const r = roots[bar];
+          notes.push({ t: (bar * 16 + s) * st, dur: st * 1.2, note: r + [0, 4, 7, 12][s % 4] - (bar === 2 && s % 4 === 1 ? 1 : 0) });
+        }
+      synth(c, notes, { wave: 'pulse', cutoff: 3000, envMod: 5000, envDecay: 0.05, gain: 0.4, width: 0.9 });
+      synth(c, roots.map((r, bar) => ({ t: bar * 16 * st, dur: 15 * st, note: r - 24 })), { wave: 'sine', cutoff: 400, gain: 0.55, drive: 2 });
+      pattern('x.....x...x.....', st, 4, (t) => kick(c, t, { f0: 190, f1: 55, decay: 0.12, drive: 2 }));
+      pattern('....x.......x...', st, 4, (t, _a, i) => clap(c, t, 1120 + i, 0.6));
+    },
+  },
+
   // ---------------------------------------------------------------- FX one-shots
   {
     id: 'fx-air-horn',
@@ -1161,6 +1372,78 @@ export const LOOPS: LoopDef[] = [
       }
     },
   },
+  // ---------------------------------------------------------------- more FX one-shots (set 3)
+  ...(
+    [
+      ['fx-sub-drop', 'Sub Drop', 3, (c: Canvas) => kick(c, 0, { f0: 90, f1: 25, sweep: 0.9, decay: 1.2, drive: 1.5 })],
+      ['fx-808-slide', '808 Slide Down', 2, (c: Canvas) => synth(c, [{ t: 0, dur: 1.6, note: 31, slide: 43 }], { wave: 'sine', cutoff: 2000, gain: 0.9, drive: 3, glide: 0.4 })],
+      ['fx-reverse-cymbal', 'Reverse Cymbal', 3, (c: Canvas) => {
+        const tmp = new Canvas(c.sr, c.length, false);
+        cymbal(tmp, 0, 51, 0.9, 0.6);
+        for (let i = 0; i < c.length; i++) c.add(i, tmp.L[c.length - 1 - i], tmp.R[c.length - 1 - i]);
+      }],
+      ['fx-uplifter', 'Uplifter (8 s)', 8, (c: Canvas) => sweep(c, 0, 7.9, 61, { from: 150, to: 14000, gainFrom: 0.01, gainTo: 1, res: 3 })],
+      ['fx-whoosh', 'Whoosh', 1.5, (c: Canvas) => {
+        sweep(c, 0, 0.7, 71, { from: 400, to: 6000, gainFrom: 0.05, gainTo: 0.9, res: 1.5 });
+        sweep(c, 0.7, 0.7, 72, { from: 6000, to: 300, gainFrom: 0.9, gainTo: 0.0, res: 1.5 });
+      }],
+      ['fx-crash', 'Crash', 3, (c: Canvas) => cymbal(c, 0, 81, 1.6, 0.8)],
+      ['fx-snare-roll', 'Snare Roll Build', 2, (c: Canvas) => {
+        // accelerating roll: gaps shrink from 1/8 to 1/32 at 128 BPM
+        let t = 0;
+        for (let i = 0; t < 1.9; i++) {
+          snare(c, t, 90 + i, { gain: 0.3 + 0.7 * (t / 1.9), tone: 190 + t * 60 });
+          t += 0.234 * Math.pow(0.25, t / 1.9);
+        }
+      }],
+      ['fx-scratch', 'Scratch', 1, (c: Canvas) => {
+        // back-and-forth "baby scratch": a band-passed noise / tone burst that sweeps up and down
+        const rnd = noise(101);
+        let ph = 0;
+        for (let i = 0; i < 0.9 * c.sr; i++) {
+          const s = i / c.sr;
+          const rate = Math.sin(TAU * 3.3 * s);
+          ph += (300 + 900 * Math.abs(rate)) / c.sr;
+          const v = (Math.sin(TAU * ph) * 0.6 + rnd() * 0.25) * Math.abs(rate);
+          c.add(i, v * 0.7);
+        }
+      }],
+      ['fx-tape-stop', 'Tape Stop', 1.5, (c: Canvas) => {
+        let ph = 0;
+        for (let i = 0; i < 1.4 * c.sr; i++) {
+          const p = i / (1.4 * c.sr);
+          ph += (220 * (1 - p) * (1 - p)) / c.sr;
+          const v = (2 * (ph - Math.floor(ph + 0.5)) * 0.5 + Math.sin(TAU * ph * 0.5) * 0.5) * (1 - p);
+          c.add(i, v * 0.7);
+        }
+      }],
+      ['fx-bell', 'Bell Hit', 3, (c: Canvas) => {
+        // inharmonic partials of a struck bell
+        for (const [ratio, amp, dec] of [[1, 0.6, 1.4], [2.76, 0.3, 0.9], [5.4, 0.2, 0.5], [8.93, 0.1, 0.3]]) {
+          for (let i = 0; i < 2.9 * c.sr; i++) {
+            const s = i / c.sr;
+            c.add(i, Math.sin(TAU * 523 * ratio * s) * amp * Math.exp(-s / dec));
+          }
+        }
+      }],
+      ['fx-reverse-snare', 'Reverse Snare', 1, (c: Canvas) => {
+        const tmp = new Canvas(c.sr, c.length, false);
+        snare(tmp, 0, 111, { gain: 1, decay: 0.5 });
+        for (let i = 0; i < c.length; i++) c.add(i, tmp.L[c.length - 1 - i], tmp.R[c.length - 1 - i]);
+      }],
+      ['fx-stutter', 'Stutter Zap', 1, (c: Canvas) => {
+        for (let k = 0; k < 8; k++) {
+          const t = k * 0.11;
+          for (let i = 0; i < 0.05 * c.sr; i++) {
+            const s = i / c.sr;
+            c.add(Math.round(t * c.sr) + i, square((1200 - k * 100) * s) * 0.4 * (1 - s / 0.05));
+          }
+        }
+      }],
+    ] as [string, string, number, (c: Canvas) => void][]
+  ).map(
+    ([id, name, seconds, render]): LoopDef => ({ id, name, genre: 'FX', kind: 'sfx', bpm: 0, bars: 0, seconds, steadyBeat: false, render }),
+  ),
 ];
 
 export function loopLengthSeconds(def: LoopDef): number {

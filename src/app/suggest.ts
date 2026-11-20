@@ -108,30 +108,41 @@ export function loopsFor(genre: Genre | null, key?: string, loops: LoopDef[] = L
 export const LOOP_PREFIX = 'loop:';
 
 /**
- * Auto-set: start with the slowest track (warm-up), then keep picking the best-matching unused
- * track, preferring a steady or rising tempo. With `loops`, a drum loop of the genre is queued as a
- * layer over transitions whose key or tempo does not match well (layers take no deck).
+ * Auto-set: start with one of the slowest tracks (warm-up), then keep picking a well-matching
+ * unused track, preferring a steady or rising tempo. Each build picks randomly among the near-best
+ * candidates, so pressing Build again gives a new set. Tracks with a `group` (the folder they were
+ * picked from) alternate between groups when there are two, for a mixed set.
+ * With `loops`, a drum loop of the genre is queued as a layer (no deck) over the next song: always
+ * where key or tempo do not match well, otherwise before every other track.
  */
-export function buildSet(tracks: MixTrack[], length: number, loops: LoopDef[] = []): string[] {
+export function buildSet(
+  tracks: (MixTrack & { group?: string })[],
+  length: number,
+  loops: LoopDef[] = [],
+  rng: () => number = Math.random,
+): string[] {
   const pool = tracks.filter((t) => t.bpm > 0);
   if (!pool.length) return [];
-  let cur = pool.reduce((a, b) => (b.bpm < a.bpm ? b : a));
+  const pick = <T>(list: T[]) => list[Math.min(list.length - 1, Math.floor(rng() * list.length))];
+  const mixed = new Set(pool.map((t) => t.group)).size > 1;
+  const slowest = [...pool].sort((a, b) => a.bpm - b.bpm).slice(0, Math.max(1, Math.ceil(pool.length / 4)));
+  let cur = pick(slowest);
   const used = new Set([cur.id]);
   const out = [cur.id];
   const bridges = loops.filter((l) => !l.key);
-  let nextLoop = 0;
   for (let count = 1; count < length; count++) {
-    let best: MixTrack | null = null;
-    let bestScore = -1;
-    for (const t of pool) {
-      if (used.has(t.id)) continue;
-      const s = matchScore(cur, t).score + (t.bpm >= cur.bpm ? 0.05 : 0);
-      if (s > bestScore) [best, bestScore] = [t, s];
-    }
-    if (!best) break;
-    if (bridges.length && (keyMatch(cur.key, best.key) < 0.8 || tempoGap(cur.bpm, best.bpm) > 3)) {
-      out.push(LOOP_PREFIX + bridges[nextLoop++ % bridges.length].id);
-    }
+    const scored = pool
+      .filter((t) => !used.has(t.id))
+      .map((t) => ({
+        t,
+        s: matchScore(cur, t).score + (t.bpm >= cur.bpm ? 0.05 : 0) + (mixed && t.group !== cur.group ? 0.4 : 0),
+      }))
+      .sort((a, b) => b.s - a.s);
+    if (!scored.length) break;
+    // near-best candidates (within 0.08 of the best, at most 4) are equally good mixes
+    const best = pick(scored.filter((x, i) => i < 4 && x.s >= scored[0].s - 0.08)).t;
+    const clash = keyMatch(cur.key, best.key) < 0.8 || tempoGap(cur.bpm, best.bpm) > 3;
+    if (bridges.length && (clash || count % 2 === 0)) out.push(LOOP_PREFIX + pick(bridges).id);
     used.add(best.id);
     out.push(best.id);
     cur = best;

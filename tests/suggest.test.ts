@@ -56,7 +56,7 @@ describe('mix suggestions', () => {
       t('d', 128, 'F#', 'M/House/d.mp3'),
       t('slow', 120, 'Am', 'M/House/s.mp3'),
     ];
-    const set = buildSet(tracks, 4);
+    const set = buildSet(tracks, 4, [], () => 0);
     expect(set[0]).toBe('slow');
     expect(set).toHaveLength(4);
     expect(new Set(set).size).toBe(4);
@@ -65,6 +65,26 @@ describe('mix suggestions', () => {
     expect(withLoops.filter((x) => !x.startsWith(LOOP_PREFIX))).toHaveLength(5);
     expect(withLoops).toContain(LOOP_PREFIX + 'drum');
     expect(withLoops[0]).not.toContain(LOOP_PREFIX);
+  });
+
+  /** small seeded random generator so the tests are repeatable */
+  const seeded = (seed: number) => () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+
+  it('builds a different set on each press, from the same tracks', () => {
+    const tracks = Array.from({ length: 12 }, (_, i) => t(`t${i}`, 124 + (i % 4), ['Am', 'Em', 'C', 'G'][i % 4], `M/House/${i}.mp3`));
+    const sets = new Set([1, 2, 3, 4, 5, 6].map((seed) => buildSet(tracks, 6, [], seeded(seed)).join(',')));
+    expect(sets.size).toBeGreaterThan(3);
+    for (const s of sets) expect(new Set(s.split(',')).size).toBe(6);
+  });
+
+  it('alternates between two folders for a mixed set', () => {
+    const tracks = [
+      ...['h1', 'h2', 'h3'].map((id) => ({ ...t(id, 126, 'Am', `M/House/${id}.mp3`), group: 'M/House' })),
+      ...['d1', 'd2', 'd3'].map((id) => ({ ...t(id, 128, 'Am', `M/Techno/${id}.mp3`), group: 'M/Techno' })),
+    ];
+    const set = buildSet(tracks, 6, [], seeded(7));
+    const groups = set.map((id) => id[0]);
+    for (let i = 1; i < groups.length; i++) expect(groups[i]).not.toBe(groups[i - 1]);
   });
 
   it('offers only loops of the genre that fit the key', () => {
