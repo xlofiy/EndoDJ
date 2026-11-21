@@ -108,6 +108,11 @@ FX → history → automix crossfade), with no console errors:
   focus, ⟳) — desktop via `endodj:rescan`, browser via stored directory handles. FLX2 crossfader inverted by default
   (user report on real hardware) with a one-time migration of saved mappings and a Controller-settings toggle.
   Aero genre (1 CC0 + 5 synthesised loops, 4 one-shots). Automix bar no longer rebuilt when unchanged.
+- **Session 9**: the Automix queue keeps its items; `PlaylistRecord.cursor` marks the next one (`src/library/queue.ts`,
+  tested, keeps the cursor on the same item through edits); played rows dimmed, deck rows marked, ⇥ play next,
+  From the top, top-bar status chip. Loading onto a playing deck replaces its track (swap after decoding); ⏏ eject.
+  Automix blends at once when the DJ starts the other deck, picks the on-air deck by crossfader side, lands a
+  running blend cleanly before a new Auto-set, and waits for an in-progress load.
 - **Fixes**: BPM low-band ripple (40-60 Hz kicks could pull the tempo to 3/4); a track loaded while
   background analysis ran lost its beat grid; Web Audio low/high-pass Q is in dB.
 

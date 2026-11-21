@@ -122,15 +122,11 @@ export class App {
     return { buffer: await this.engine.ctx.decodeAudioData(data), art };
   }
 
-  async loadTrack(deckIndex: number, trackId: string, opts: { force?: boolean } = {}): Promise<boolean> {
+  async loadTrack(deckIndex: number, trackId: string): Promise<boolean> {
     if (trackId.startsWith(LOOP_PREFIX)) return this.loadLoop(deckIndex, trackId.slice(LOOP_PREFIX.length));
     const deck = this.engine.decks[deckIndex];
     const rec = this.library.tracks.get(trackId);
     if (!rec) return false;
-    if (deck.playing && !opts.force) {
-      this.toast(`Deck ${deckIndex === 0 ? 'A' : 'B'} is playing — stop it before loading a new track.`, true);
-      return false;
-    }
     const seq = ++this.loadSeq[deckIndex];
     let buffer: AudioBuffer;
     let art: Artwork | null;
@@ -141,10 +137,8 @@ export class App {
       return false;
     }
     if (seq !== this.loadSeq[deckIndex]) return false; // a newer load replaced this one
-    if (deck.playing && !opts.force) {
-      this.toast('Deck started playing while loading — load cancelled.', true);
-      return false;
-    }
+    // loading onto a playing deck replaces its track (it keeps playing until the new one is ready)
+    if (deck.playing) deck.pause();
     deck.load({ id: rec.id, title: rec.title, artist: rec.artist }, buffer, {
       cuePoint: rec.cuePoint,
       hotcues: rec.hotcues,
@@ -237,10 +231,6 @@ export class App {
     const deck = this.engine.decks[deckIndex];
     const def = this.looplab.def(loopId);
     if (!def) return false;
-    if (deck.playing) {
-      this.toast(`Deck ${deckIndex === 0 ? 'A' : 'B'} is playing — stop it before loading a loop.`, true);
-      return false;
-    }
     const seq = ++this.loadSeq[deckIndex];
     let buffer: AudioBuffer;
     try {
@@ -249,7 +239,8 @@ export class App {
       this.toast(`Could not load "${def.name}": ${(e as Error).message}`, true);
       return false;
     }
-    if (seq !== this.loadSeq[deckIndex] || deck.playing) return false;
+    if (seq !== this.loadSeq[deckIndex]) return false;
+    if (deck.playing) deck.pause();
     deck.load({ id: LOOP_PREFIX + loopId, title: def.name, artist: `${def.genre} · Loop Lab` }, buffer);
     this.loggedPlay[deckIndex] = null;
     deck.setKey(parseKey(def.key));

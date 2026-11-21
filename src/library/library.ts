@@ -5,6 +5,7 @@
  */
 import { LibraryDB, type HistoryRecord, type PlaylistRecord, type TrackRecord } from './db';
 import { isAudioFile, parseFileName, trackId } from './export';
+import { cursorAfterMove, cursorAfterRemove } from './queue';
 
 type Listener = () => void;
 
@@ -292,6 +293,7 @@ export class Library {
     await this.db.delete('handles', id);
     for (const p of this.playlists) {
       if (p.trackIds.includes(id)) {
+        for (let i = p.trackIds.length - 1; i >= 0; i--) if (p.trackIds[i] === id && p.cursor) p.cursor = cursorAfterRemove(p.cursor, i);
         p.trackIds = p.trackIds.filter((t) => t !== id);
         await this.db.put('playlists', p);
       }
@@ -363,7 +365,8 @@ export class Library {
   async setPlaylist(id: string, trackIds: string[]): Promise<void> {
     const p = this.playlist(id);
     if (!p) return;
-    p.trackIds = [...trackIds]; // never share the caller's array: automix shifts the queue in place
+    p.trackIds = [...trackIds]; // never share the caller's array
+    p.cursor = 0;
     await this.db.put('playlists', p);
     this.emit();
   }
@@ -372,6 +375,7 @@ export class Library {
     const p = this.playlist(id);
     if (!p) return;
     p.trackIds.splice(index, 1);
+    if (p.cursor) p.cursor = cursorAfterRemove(p.cursor, index);
     await this.db.put('playlists', p);
     this.emit();
   }
@@ -381,17 +385,34 @@ export class Library {
     if (!p || from === to || from < 0 || to < 0 || from >= p.trackIds.length || to >= p.trackIds.length) return;
     const [x] = p.trackIds.splice(from, 1);
     p.trackIds.splice(to, 0, x);
+    if (p.cursor) p.cursor = cursorAfterMove(p.cursor, from, to);
     await this.db.put('playlists', p);
     this.emit();
   }
 
-  /** Remove and return the first track of a playlist (used by automix). */
-  async shiftPlaylist(id: string): Promise<string | undefined> {
+  /** Automix queue: the next item to play (moves the cursor past it), or undefined at the end. */
+  async nextInQueue(id: string): Promise<string | undefined> {
     const p = this.playlist(id);
-    if (!p || !p.trackIds.length) return undefined;
-    const t = p.trackIds.shift();
+    const i = p?.cursor ?? 0;
+    if (!p || i >= p.trackIds.length) return undefined;
+    p.cursor = i + 1;
     await this.db.put('playlists', p);
     this.emit();
-    return t;
+    return p.trackIds[i];
+  }
+
+  /** items of the Automix queue that have not been played yet */
+  queueRemaining(id: string): number {
+    const p = this.playlist(id);
+    return p ? Math.max(0, p.trackIds.length - (p.cursor ?? 0)) : 0;
+  }
+
+  /** make item `index` the next one to play (0 = start over) */
+  async setCursor(id: string, index: number): Promise<void> {
+    const p = this.playlist(id);
+    if (!p) return;
+    p.cursor = Math.max(0, Math.min(index, p.trackIds.length));
+    await this.db.put('playlists', p);
+    this.emit();
   }
 }

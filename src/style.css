@@ -1544,3 +1544,26 @@ body.lowfx .sun::after {
   font-weight: 600;
   color: var(--accent);
 }
+/* Automix queue: played items stay, dimmed; the next one stands out */
+#lib-table tr.played td {
+  opacity: 0.5;
+}
+#lib-table tr.played.loaded-0 td,
+#lib-table tr.played.loaded-1 td {
+  opacity: 1;
+  font-weight: 600;
+}
+#lib-table tr.next td {
+  font-weight: 700;
+}
+#lib-table tr.next td:first-child {
+  color: var(--accent);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+}
+#am-chip {
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -180,6 +180,7 @@ export class UI {
           <button class="sync" title="Sync tempo and beat to the other deck">SYNC</button>
           <button class="rev" title="Reverse playback">REV</button>
           <button class="quant on" title="Quantize cues and loops to the beat grid">Q</button>
+          <button class="eject" title="Eject: stop and unload this deck's track">⏏</button>
         </div>
         <div class="keyrow">
           <span class="label">KEY</span><span class="keychip mono" title="Key you hear now (Camelot · name)">—</span>
@@ -299,6 +300,10 @@ export class UI {
       };
     });
     ui.rev.onclick = () => deck.setReverse(!deck.reverse);
+    $('.eject', root).onclick = () => {
+      deck.pause();
+      deck.unload();
+    };
     ui.quant.onclick = () => {
       deck.quantize = !deck.quantize;
     };

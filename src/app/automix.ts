@@ -88,8 +88,7 @@ export class Automix {
     if (!on && this.timer !== null) {
       clearInterval(this.timer);
       this.timer = null;
-      if (this.transition) for (const i of [0, 1]) this.app.engine.strips[i].set('low', this.transition.lows[i]);
-      this.transition = null;
+      this.finishTransition();
       this.plan = null;
       this.stopLayer();
     }
@@ -104,14 +103,18 @@ export class Automix {
    */
   async startQueue(): Promise<boolean> {
     const [a, b] = this.app.engine.decks;
-    this.transition = null;
+    while (this.loading) await new Promise((r) => setTimeout(r, 50)); // a load the timer started
+    this.finishTransition(); // a new set mid-blend: land the blend cleanly first
+    this.plan = null;
+    this.planKey = '';
     this.layers = [null, null];
     if (!a.playing && !b.playing) {
       if (!(await this.loadNext(a))) return false;
       await this.loadNext(b);
       this.app.engine.setCrossfader(0);
     } else {
-      const free = a.playing ? b : a;
+      // the deck that is not on air (with both playing: the side the crossfader is away from)
+      const free = a.playing && b.playing ? (this.app.engine.crossfader <= 0.5 ? b : a) : a.playing ? b : a;
       if (!(await this.loadNext(free))) return false;
     }
     this.setEnabled(true);
@@ -119,7 +122,21 @@ export class Automix {
   }
 
   private queueLength(): number {
-    return this.app.library.playlist(AUTOMIX_ID)?.trackIds.length ?? 0;
+    return this.app.library.queueRemaining(AUTOMIX_ID);
+  }
+
+  /** End a running blend now: incoming deck fully in, outgoing stopped, EQ restored. */
+  private finishTransition(): void {
+    const tr = this.transition;
+    if (!tr) return;
+    const eng = this.app.engine;
+    eng.setCrossfader(tr.to.index === 0 ? 0 : 1);
+    tr.from.pause();
+    for (const i of [0, 1]) eng.strips[i].set('low', tr.lows[i]);
+    this.transition = null;
+    this.plan = null;
+    this.planKey = '';
+    this.app.onControl?.();
   }
 
   /** Load the next queued track on `deck`, cue it at its first beat. Layers on the way are kept for the transition. */
@@ -129,7 +146,7 @@ export class Automix {
     let layer: string | null = null;
     try {
       while (this.queueLength() > 0) {
-        const id = await this.app.library.shiftPlaylist(AUTOMIX_ID);
+        const id = await this.app.library.nextInQueue(AUTOMIX_ID);
         if (!id) break;
         if (id.startsWith(LOOP_PREFIX)) {
           layer = id.slice(LOOP_PREFIX.length);
@@ -224,15 +241,17 @@ export class Automix {
         eng.strips[to.index].set('low', lows[to.index]);
       }
       this.app.onControl?.();
-      if (t >= 1 || !from.playing) {
-        eng.setCrossfader(target);
-        from.pause();
-        eng.strips[from.index].set('low', lows[from.index]);
-        eng.strips[to.index].set('low', lows[to.index]);
+      if (!to.playing) {
+        // the DJ stopped the incoming track: abandon the blend, the outgoing one carries on
+        eng.setCrossfader(from.index === 0 ? 0 : 1);
+        for (const i of [0, 1]) eng.strips[i].set('low', lows[i]);
         this.transition = null;
         this.plan = null;
         this.planKey = '';
-        this.app.onControl?.();
+        return;
+      }
+      if (t >= 1 || !from.playing) {
+        this.finishTransition();
         // the finished deck gets the next track right away, so it is clear what plays next
         if (this.queueLength() > 0) await this.loadNext(from);
       }
@@ -245,7 +264,7 @@ export class Automix {
       const deck = a.loaded && a.time < a.duration - 1 ? a : b.loaded && b.time < b.duration - 1 ? b : null;
       const target = deck ?? a;
       if (!deck && !(await this.loadNext(target))) {
-        this.app.toast('Automix: the queue is empty. Add tracks to "Automix queue".');
+        this.app.toast('Automix: end of the queue. Add tracks, build an Auto-set, or press "From the top".');
         this.setEnabled(false);
         return;
       }
@@ -257,26 +276,30 @@ export class Automix {
       return;
     }
 
-    const from = playing[0];
+    // with both decks running, the one on air is the side the crossfader is on
+    const from = playing.length > 1 ? eng.decks[eng.crossfader <= 0.5 ? 0 : 1] : playing[0];
     const to = eng.otherDeck(from);
     if (!to.loaded || to.time >= to.duration - 1) {
       this.plan = null;
       if (this.queueLength() > 0) await this.loadNext(to);
       return;
     }
-    if (to.playing) return; // the DJ took over
     const plan = this.planFor(from, to);
-    if (from.time < plan.start) return;
+    // the DJ started the other deck by hand: blend into it now instead of leaving it silent
+    const manual = to.playing;
+    if (!manual && from.time < plan.start) return;
     // started late (seeked past the plan): blend over what is left, at least 4 s
     const start = from.time;
     const end = Math.min(from.duration, Math.max(plan.end, start + 4));
     this.plan = { ...plan, start, end, deck: from.index, next: plan.next };
-    if (to.grid && from.grid) to.syncTo(from);
-    const fk = from.effectiveKey;
-    if (this.settings.harmonic && fk && to.key && keyMatch(keyName(fk), keyName(to.key)) < 0.8) to.keySyncTo(from);
-    eng.strips[to.index].set('volume', Math.max(eng.strips[to.index].values.volume, 0.8));
-    to.play();
-    if (to.grid && from.grid) to.alignPhase(from);
+    if (!manual) {
+      if (to.grid && from.grid) to.syncTo(from);
+      const fk = from.effectiveKey;
+      if (this.settings.harmonic && fk && to.key && keyMatch(keyName(fk), keyName(to.key)) < 0.8) to.keySyncTo(from);
+      eng.strips[to.index].set('volume', Math.max(eng.strips[to.index].values.volume, 0.8));
+      to.play();
+      if (to.grid && from.grid) to.alignPhase(from);
+    }
     const lows: [number, number] = [eng.strips[0].values.low, eng.strips[1].values.low];
     eng.strips[to.index].set('low', 0); // incoming bass stays out until the swap
     this.transition = { from, to, start, end, startX: eng.crossfader, lows, swapped: false };

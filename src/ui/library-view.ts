@@ -124,7 +124,12 @@ export class LibraryView {
 
   init(): void {
     const lib = this.app.library;
-    window.setInterval(() => this.view === AUTOMIX_ID && this.updateNext(), 500);
+    window.setInterval(() => this.updateNext(), 500);
+    el('#am-chip').onclick = () => {
+      this.view = AUTOMIX_ID;
+      this.amTab = 'queue';
+      this.render();
+    };
     void this.rescan();
     window.addEventListener('focus', () => void this.rescan());
     lib.on(() => this.schedule());
@@ -350,10 +355,12 @@ export class LibraryView {
     bar.hidden = this.view !== AUTOMIX_ID;
     if (this.view !== AUTOMIX_ID) return;
     const am = this.app.automix;
-    const queueLen = lib.playlist(AUTOMIX_ID)?.trackIds.length ?? 0;
+    const queueLen = lib.queueRemaining(AUTOMIX_ID);
+    const queueTotal = lib.playlist(AUTOMIX_ID)?.trackIds.length ?? 0;
     const saved = lib.playlists.filter((p) => p.id !== AUTOMIX_ID);
     let html = `
-      <span class="tabs"><button data-tab="queue" class="${this.amTab === 'queue' ? 'on' : ''}">Queue (${queueLen})</button><button data-tab="suggest" class="${this.amTab === 'suggest' ? 'on' : ''}" title="Tracks that mix well after what is on deck A / B">Suggestions</button></span>
+      <span class="tabs"><button data-tab="queue" class="${this.amTab === 'queue' ? 'on' : ''}" title="${queueLen} of ${queueTotal} still to play">Queue (${queueLen}/${queueTotal})</button><button data-tab="suggest" class="${this.amTab === 'suggest' ? 'on' : ''}" title="Tracks that mix well after what is on deck A / B">Suggestions</button></span>
+      ${queueTotal > queueLen ? '<button id="am-top" title="Play the queue again from the first item">From the top</button>' : ''}
       <button id="am-toggle" class="chip ${am.enabled ? 'on' : ''}" title="Mix through this queue automatically: beat-matched crossfades before each track ends; tracks alternate between deck A and B">Automix ${am.enabled ? 'on' : 'off'}</button>
       <details class="am-settings" ${this.mixSettingsOpen ? 'open' : ''}><summary>Mix settings</summary>
         <label title="Layer songs: both songs play together for the whole blend (bass swapped halfway). Crossfade: a plain fade.">Style
@@ -425,6 +432,7 @@ export class LibraryView {
     el<HTMLInputElement>('#am-loopmix').onchange = (e) => am.setSettings({ loopEveryMix: (e.target as HTMLInputElement).checked });
     this.updateNext();
     el('#am-save').onclick = () => void this.saveSet();
+    bar.querySelector<HTMLButtonElement>('#am-top')?.addEventListener('click', () => void lib.setCursor(AUTOMIX_ID, 0));
     const load = el<HTMLSelectElement>('#am-load');
     load.onchange = () => void this.loadSet(load.value);
     bar.querySelectorAll<HTMLButtonElement>('[data-seed]').forEach((b) => {
@@ -450,6 +458,16 @@ export class LibraryView {
       loops.onchange = () => (this.setLoops = loops.checked);
       el('#as-build').onclick = () => void this.autoSet(this.setFolder, this.setFolder2);
     }
+  }
+
+  /** Make queue item `index` the next one Automix loads (played items come back too). */
+  private async playNext(index: number): Promise<void> {
+    const lib = this.app.library;
+    const cursor = lib.playlist(AUTOMIX_ID)?.cursor ?? 0;
+    if (index < cursor) {
+      await lib.moveInPlaylist(AUTOMIX_ID, index, cursor - 1);
+      await lib.setCursor(AUTOMIX_ID, cursor - 1);
+    } else await lib.moveInPlaylist(AUTOMIX_ID, index, cursor);
   }
 
   /** Automix on: a fresh start puts the first two queued tracks on A and B. */
@@ -484,9 +502,8 @@ export class LibraryView {
 
   /** "Next: … · mix in 0:42" in the Automix bar (called twice a second while the view is open) */
   updateNext(): void {
-    const span = document.getElementById('am-next');
-    if (!span) return;
     const am = this.app.automix;
+    const span = document.getElementById('am-next');
     const p = am.plan;
     let text = '';
     if (am.enabled && p) {
@@ -498,7 +515,12 @@ export class LibraryView {
           ? `Next on ${deck}: ${p.next} · mix in ${Math.floor(secs / 60)}:${String(Math.floor(secs % 60)).padStart(2, '0')}`
           : `Mixing into ${p.next} (${deck}) · ${Math.round(Math.min(1, (d.time - p.start) / Math.max(0.1, p.end - p.start)) * 100)} %`;
     } else if (am.enabled) text = 'Automix on';
-    if (span.textContent !== text) span.textContent = text;
+    if (span && span.textContent !== text) span.textContent = text;
+    // top-bar chip: visible from anywhere while Automix runs
+    const chip = el('#am-chip');
+    if (chip.hidden === am.enabled) chip.hidden = !am.enabled;
+    const chipText = text.replace(/^Next on /, 'Automix · next on ').replace(/^Mixing/, 'Automix · mixing');
+    if (am.enabled && chip.textContent !== chipText) chip.textContent = chipText;
   }
 
   private setFolder = '';
@@ -652,6 +674,8 @@ export class LibraryView {
     const lib = this.app.library;
     const loaded = this.app.engine.decks.map((d) => d.track?.id);
     const inPlaylist = !!lib.playlist(this.view) && !this.suggesting;
+    const queue = this.view === AUTOMIX_ID && !this.suggesting;
+    const cursor = queue ? (lib.playlist(AUTOMIX_ID)?.cursor ?? 0) : -1;
     const parts: string[] = [`<tr class="spacer"><td colspan="8" style="height:${first * ROW_H}px"></td></tr>`];
     for (let i = first; i < last; i++) {
       const x = this.rows[i];
@@ -661,16 +685,28 @@ export class LibraryView {
         lib.isAvailable(x.id) || x.id.startsWith(LOOP_PREFIX) ? '' : 'unavailable',
         loaded[0] === x.id ? 'loaded-0' : '',
         loaded[1] === x.id ? 'loaded-1' : '',
+        queue && x.index < cursor ? 'played' : '',
+        queue && x.index === cursor ? 'next' : '',
       ].join(' ');
       const why = this.suggesting ? this.matches.get(x.id)?.reasons.join(' · ') : '';
-      const firstCol = x.playedAt ? new Date(x.playedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : String(i + 1);
+      const onDeck = queue && x.index < cursor ? loaded.indexOf(x.id) : -1;
+      const firstCol = queue
+        ? onDeck >= 0
+          ? `${this.app.engine.decks[onDeck].playing ? '▶' : '●'} ${onDeck ? 'B' : 'A'}`
+          : x.index < cursor
+          ? '✓'
+          : x.index === cursor
+            ? 'NEXT'
+            : String(x.index + 1)
+        : x.playedAt ? new Date(x.playedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : String(i + 1);
       parts.push(`<tr class="${cls}" draggable="true" data-id="${esc(x.id)}" data-index="${x.index}">
         <td class="muted">${firstCol}</td><td title="${esc(r.fileName)}">${esc(r.title)}${why ? ` <small class="why">${esc(why)}</small>` : ''}</td><td>${esc(r.artist)}</td>
         <td class="mono">${r.bpm > 0 ? r.bpm.toFixed(1) : ''}</td><td class="mono">${keyCell(r.key)}</td><td class="mono">${r.duration ? formatDuration(r.duration) : ''}</td>
         <td class="mono">${r.playCount || ''}</td>
         <td><button data-load="0" title="Load to deck A">A</button><button data-load="1" title="Load to deck B">B</button><button data-queue title="Add to Automix queue">Q</button>${
           inPlaylist
-            ? '<button data-up title="Move up">↑</button><button data-down title="Move down">↓</button><button data-remove title="Remove from playlist">✕</button>'
+            ? (queue ? '<button data-next title="Play next">⇥</button>' : '') +
+              '<button data-up title="Move up">↑</button><button data-down title="Move down">↓</button><button data-remove title="Remove from playlist">✕</button>'
             : this.view === 'all'
               ? '<button data-delete title="Remove from library (the file stays on your disk)">✕</button>'
               : ''
@@ -691,7 +727,8 @@ export class LibraryView {
     else if (t.dataset.queue !== undefined) {
       void lib.addToPlaylist(AUTOMIX_ID, [id]);
       this.toast('Added to Automix queue.');
-    } else if (t.dataset.up !== undefined) void lib.moveInPlaylist(this.view, index, index - 1);
+    } else if (t.dataset.next !== undefined) void this.playNext(index);
+    else if (t.dataset.up !== undefined) void lib.moveInPlaylist(this.view, index, index - 1);
     else if (t.dataset.down !== undefined) void lib.moveInPlaylist(this.view, index, index + 1);
     else if (t.dataset.remove !== undefined) void lib.removeFromPlaylist(this.view, index);
     else if (t.dataset.delete !== undefined) {

@@ -460,6 +460,10 @@ export const GUIDES: Guide[] = [
         over the next song for 16 bars, in time with the mix. Auto-set adds drum-loop layers.</li>
       <li><b>Suggestions</b> (a tab in the Automix queue) lists the tracks that mix best after deck A or B, with the
         reason, leaving out what is queued or already played, plus loop layers that fit.</li>
+      <li>The queue keeps every track: played ones are dimmed (✓), the decks' tracks are marked ▶ A / ● B, and the
+        next one says <b>NEXT</b>. <b>⇥</b> makes any track play next; <b>From the top</b> starts the queue again. While
+        Automix runs, a chip in the top bar shows what comes next. Start the other deck yourself and Automix blends
+        into it right away.</li>
       <li><b>Save set</b> keeps the queue as a playlist; <b>Load set</b> puts a saved set back in the queue.</li>
       <li>History lists everything you played this session. Export it as your setlist.</li>
       <li>The <b>Layout</b> button (top bar) or the bar above the song list gives the list more room.</li>

@@ -29,6 +29,8 @@ export interface PlaylistRecord {
   name: string;
   trackIds: string[];
   createdAt: number;
+  /** Automix queue: items before this index have been played (kept in the list, shown dimmed) */
+  cursor?: number;
 }
 
 export interface HistoryRecord {
