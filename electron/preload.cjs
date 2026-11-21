@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('endodjNative', {
   /** @returns {Promise<{root: string|null, files: {path,name,size,lastModified,relativePath}[]} | null>} */
   pickFolder: () => ipcRenderer.invoke('endodj:pick-folder'),
   pickFiles: () => ipcRenderer.invoke('endodj:pick-files'),
+  rescan: () => ipcRenderer.invoke('endodj:rescan'),
   /** @returns {Promise<ArrayBuffer>} */
   readFile: (path) => ipcRenderer.invoke('endodj:read-file', path),
   exists: (path) => ipcRenderer.invoke('endodj:exists', path),

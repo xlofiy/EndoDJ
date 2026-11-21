@@ -7,11 +7,27 @@
  * transition into the track after them, tempo- and bar-synced to the outgoing deck.
  */
 import type { Deck } from '../audio/deck';
+import { keyName } from '../audio/key';
 import { beatAt, timeOfBeat } from '../audio/mixmath';
+import { detectSections } from '../audio/sections';
 import { findLoop } from '../loops/catalog';
 import { AUTOMIX_ID } from '../library/library';
 import type { App } from './app';
-import { LOOP_PREFIX } from './suggest';
+import { blendPosition, planMixOut, type MixPlan } from './mixplan';
+import { genreOf, keyMatch, loopsFor, LOOP_PREFIX } from './suggest';
+
+export interface AutomixSettings {
+  /** 'fade': crossfade of `fadeSeconds`; 'layer': both songs play together for `blendBars` */
+  style: 'fade' | 'layer';
+  fadeSeconds: number;
+  blendBars: number;
+  /** shift the incoming track's key when the two keys clash */
+  harmonic: boolean;
+  /** a drum loop of the genre on every mix (third channel), not only queued layers */
+  loopEveryMix: boolean;
+}
+const SETTINGS_KEY = 'endodj.automix.v1';
+const DEFAULTS: AutomixSettings = { style: 'layer', fadeSeconds: 12, blendBars: 16, harmonic: true, loopEveryMix: false };
 
 /** a layer keeps playing over the incoming song for this many bars after the crossfade */
 const LAYER_TAIL_BARS = 16;
@@ -19,9 +35,11 @@ const LAYER_GAIN = 0.55;
 
 export class Automix {
   enabled = false;
-  /** crossfade length in seconds of real time */
-  fadeSeconds = 12;
-  private transition: { from: Deck; to: Deck; start: number; startX: number; lows: [number, number]; swapped: boolean } | null = null;
+  settings: AutomixSettings = Automix.loadSettings();
+  /** the planned (or running) blend out of the playing deck, in its track time — drawn on the waveforms */
+  plan: (MixPlan & { deck: number; next: string }) | null = null;
+  private planKey = '';
+  private transition: { from: Deck; to: Deck; start: number; end: number; startX: number; lows: [number, number]; swapped: boolean } | null = null;
   private loading = false;
   private timer: number | null = null;
   /** per deck: Loop Lab layer to play when that deck comes in */
@@ -31,6 +49,39 @@ export class Automix {
 
   constructor(private app: App) {}
 
+  static loadSettings(): AutomixSettings {
+    try {
+      return { ...DEFAULTS, ...(JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') as Partial<AutomixSettings>) };
+    } catch {
+      return { ...DEFAULTS };
+    }
+  }
+
+  setSettings(patch: Partial<AutomixSettings>): void {
+    this.settings = { ...this.settings, ...patch };
+    this.planKey = ''; // re-plan with the new blend
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings));
+    } catch {
+      /* storage unavailable */
+    }
+    this.onChange?.();
+  }
+
+  /** Where to mix out of `from` (cached per track and settings). */
+  private planFor(from: Deck, to: Deck): MixPlan & { deck: number; next: string } {
+    const s = this.settings;
+    const bpm = from.grid?.bpm ?? 0;
+    const len = s.style === 'layer' && bpm > 0 ? (s.blendBars * 240) / bpm : s.fadeSeconds * Math.abs(from.tempoFactor);
+    const key = `${from.track?.id}|${to.track?.id}|${s.style}|${len.toFixed(2)}|${from.grid?.firstBeat}`;
+    if (key !== this.planKey || !this.plan) {
+      const sections = from.grid && from.waveform ? detectSections(from.waveform, from.grid, from.duration) : [];
+      const p = planMixOut(from.duration, from.grid, sections, len);
+      this.plan = { ...p, deck: from.index, next: to.track?.title ?? '' };
+      this.planKey = key;
+    }
+    return this.plan;
+  }
   setEnabled(on: boolean): void {
     this.enabled = on;
     if (on && this.timer === null) this.timer = window.setInterval(() => void this.tick(), 100);
@@ -39,6 +90,7 @@ export class Automix {
       this.timer = null;
       if (this.transition) for (const i of [0, 1]) this.app.engine.strips[i].set('low', this.transition.lows[i]);
       this.transition = null;
+      this.plan = null;
       this.stopLayer();
     }
     if (on) void this.tick();
@@ -95,13 +147,8 @@ export class Automix {
     }
   }
 
-  /** seconds of real time until the end of the deck's track */
-  private remaining(deck: Deck): number {
-    return (deck.duration - deck.time) / Math.max(0.01, Math.abs(deck.tempoFactor));
-  }
-
   /** Play a Loop Lab loop on top of the mix, at the lead deck's tempo, starting on its next bar. */
-  private async startLayer(loopId: string, lead: Deck): Promise<void> {
+  private async startLayer(loopId: string, lead: Deck, blendSec: number): Promise<void> {
     const def = findLoop(loopId);
     if (!def || def.bpm <= 0) return;
     let buf: AudioBuffer;
@@ -127,7 +174,7 @@ export class Automix {
     const gain = ctx.createGain();
     const barSec = (4 * 60) / bpm;
     const t0 = ctx.currentTime + delay;
-    const end = t0 + this.fadeSeconds + LAYER_TAIL_BARS * barSec;
+    const end = t0 + blendSec + LAYER_TAIL_BARS * barSec;
     gain.gain.setValueAtTime(0, ctx.currentTime);
     gain.gain.setValueAtTime(LAYER_GAIN, t0);
     gain.gain.setValueAtTime(LAYER_GAIN, end - barSec);
@@ -143,10 +190,10 @@ export class Automix {
   }
 
   /** start the layer queued for `deck` (if any), synced to `lead` */
-  private playLayer(deck: Deck, lead: Deck): void {
+  private playLayer(deck: Deck, lead: Deck, blendSec = 0): void {
     const id = this.layers[deck.index];
     this.layers[deck.index] = null;
-    if (id) void this.startLayer(id, lead);
+    if (id) void this.startLayer(id, lead, blendSec);
   }
 
   private stopLayer(): void {
@@ -165,10 +212,11 @@ export class Automix {
 
     if (this.transition) {
       const tr = this.transition;
-      const { from, to, start, startX, lows } = tr;
-      const t = Math.min(1, (eng.ctx.currentTime - start) / this.fadeSeconds);
+      const { from, to, start, end, startX, lows } = tr;
+      // progress follows the outgoing track's own time, so the blend stays on its phrases
+      const t = Math.min(1, Math.max(0, (from.time - start) / Math.max(0.1, end - start)));
       const target = to.index === 0 ? 0 : 1;
-      eng.setCrossfader(startX + (target - startX) * t);
+      eng.setCrossfader(startX + (target - startX) * blendPosition(t, this.settings.style));
       // bass swap halfway, like a DJ: never two kick drums / bass lines at full level at once
       if (t >= 0.5 && !tr.swapped) {
         tr.swapped = true;
@@ -182,6 +230,8 @@ export class Automix {
         eng.strips[from.index].set('low', lows[from.index]);
         eng.strips[to.index].set('low', lows[to.index]);
         this.transition = null;
+        this.plan = null;
+        this.planKey = '';
         this.app.onControl?.();
         // the finished deck gets the next track right away, so it is clear what plays next
         if (this.queueLength() > 0) await this.loadNext(from);
@@ -210,18 +260,36 @@ export class Automix {
     const from = playing[0];
     const to = eng.otherDeck(from);
     if (!to.loaded || to.time >= to.duration - 1) {
+      this.plan = null;
       if (this.queueLength() > 0) await this.loadNext(to);
       return;
     }
-    if (this.remaining(from) <= this.fadeSeconds && !to.playing) {
-      if (to.grid && from.grid) to.syncTo(from);
-      eng.strips[to.index].set('volume', Math.max(eng.strips[to.index].values.volume, 0.8));
-      to.play();
-      if (to.grid && from.grid) to.alignPhase(from);
-      const lows: [number, number] = [eng.strips[0].values.low, eng.strips[1].values.low];
-      eng.strips[to.index].set('low', 0); // incoming bass stays out until the swap
-      this.transition = { from, to, start: eng.ctx.currentTime, startX: eng.crossfader, lows, swapped: false };
-      this.playLayer(to, from);
-    }
+    if (to.playing) return; // the DJ took over
+    const plan = this.planFor(from, to);
+    if (from.time < plan.start) return;
+    // started late (seeked past the plan): blend over what is left, at least 4 s
+    const start = from.time;
+    const end = Math.min(from.duration, Math.max(plan.end, start + 4));
+    this.plan = { ...plan, start, end, deck: from.index, next: plan.next };
+    if (to.grid && from.grid) to.syncTo(from);
+    const fk = from.effectiveKey;
+    if (this.settings.harmonic && fk && to.key && keyMatch(keyName(fk), keyName(to.key)) < 0.8) to.keySyncTo(from);
+    eng.strips[to.index].set('volume', Math.max(eng.strips[to.index].values.volume, 0.8));
+    to.play();
+    if (to.grid && from.grid) to.alignPhase(from);
+    const lows: [number, number] = [eng.strips[0].values.low, eng.strips[1].values.low];
+    eng.strips[to.index].set('low', 0); // incoming bass stays out until the swap
+    this.transition = { from, to, start, end, startX: eng.crossfader, lows, swapped: false };
+    const blendSec = (end - start) / Math.max(0.01, Math.abs(from.tempoFactor));
+    if (!this.layers[to.index] && this.settings.loopEveryMix) this.layers[to.index] = this.everyMixLoop(to, from);
+    this.playLayer(to, from, blendSec);
+  }
+
+  /** a drum loop (no key, so it never clashes) of the incoming or outgoing track's genre */
+  private everyMixLoop(to: Deck, from: Deck): string | null {
+    const lib = this.app.library;
+    const path = (d: Deck) => (d.track ? (lib.tracks.get(d.track.id)?.path ?? '') : '');
+    const loops = loopsFor(genreOf(path(to)) ?? genreOf(path(from)), undefined).filter((l) => !l.key);
+    return loops.length ? loops[Math.floor(Math.random() * loops.length)].id : null;
   }
 }

@@ -79,6 +79,7 @@ export function suggestTracks(seed: MixTrack, tracks: Iterable<MixTrack>, max = 
 // keyword → Loop Lab genre; checked in order, so specific names come first
 const GENRE_WORDS: [Genre, RegExp][] = [
   ['Eurobeat', /euro ?beat|para ?para|initial ?d/],
+  ['Aero', /aero|frutiger|vapou?r ?wave|chill ?wave|lo-?fi|ambient/],
   ['Jersey Club', /jersey|baltimore|club ?music/],
   ['Hardstyle', /hardstyle|rawstyle|hard ?dance|gabber|hardcore/],
   ['Breakcore', /breakcore|amen|breaks/],

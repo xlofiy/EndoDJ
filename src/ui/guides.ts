@@ -451,6 +451,11 @@ export const GUIDES: Guide[] = [
       <li><b>Auto-set</b> builds a new set from a folder each time you press it: it starts slow, then picks a good tempo
         and key match each time, loads it onto A and B and starts Automix. Pick a second folder under <b>mixed with</b>
         and the set alternates between the two. <b>Save set</b> keeps it.</li>
+      <li><b>Mix settings</b> (Automix queue): <b>Layer songs</b> plays both songs together for 8, 16 or 32 bars,
+        bass swapped halfway; <b>Crossfade</b> is a plain fade. Automix mixes out where a track's outro starts, or on the
+        last 8-bar phrase, so songs change on the beat structure. <b>Match keys</b> shifts the incoming track when the
+        keys clash; <b>Loop layer on every mix</b> adds a genre drum loop as a third channel. The gold <b>MIX →</b> zone
+        on the waveforms shows exactly where the next song comes in, and the bar shows a countdown.</li>
       <li><b>Layers</b>: a Loop Lab loop in the queue takes no deck. It comes in with the transition and keeps playing
         over the next song for 16 bars, in time with the mix. Auto-set adds drum-loop layers.</li>
       <li><b>Suggestions</b> (a tab in the Automix queue) lists the tracks that mix best after deck A or B, with the

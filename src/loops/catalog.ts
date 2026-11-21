@@ -7,8 +7,8 @@
  */
 import { Canvas, clap, crush, cymbal, hat, kick, noise, snare, square, sweep, synth, SVF, softClip, TAU, type SynthNote } from './dsp';
 
-export type Genre = 'EDM' | 'Rave' | 'Techno' | 'Eurobeat' | 'Hardstyle' | 'Jersey Club' | 'Scene' | 'Breakcore' | 'Hyperpop' | 'FX';
-export const GENRES: Genre[] = ['EDM', 'Rave', 'Techno', 'Eurobeat', 'Hardstyle', 'Jersey Club', 'Scene', 'Breakcore', 'Hyperpop', 'FX'];
+export type Genre = 'EDM' | 'Rave' | 'Techno' | 'Eurobeat' | 'Aero' | 'Hardstyle' | 'Jersey Club' | 'Scene' | 'Breakcore' | 'Hyperpop' | 'FX';
+export const GENRES: Genre[] = ['EDM', 'Rave', 'Techno', 'Eurobeat', 'Aero', 'Hardstyle', 'Jersey Club', 'Scene', 'Breakcore', 'Hyperpop', 'FX'];
 
 export interface LoopDef {
   id: string;
@@ -104,6 +104,18 @@ const BUNDLED: LoopDef[] = [
     key: 'Am',
     file: 'cc0-eurobeat-super-santa.ogg',
     credit: { title: 'Super Santa Claus', author: 'MintoDog', url: `${OGA}super-santa-claus`, license: 'CC0' },
+  },
+  {
+    id: 'cc0-aero-brassy-bubbles',
+    name: 'Brassy Bubbles',
+    genre: 'Aero',
+    kind: 'synth',
+    bpm: 120,
+    bars: 8,
+    steadyBeat: true,
+    key: 'G',
+    file: 'cc0-aero-brassy-bubbles.ogg',
+    credit: { title: 'Brassy Bubbles', author: 'Technodono', url: `${OGA}brassy-bubbles`, license: 'CC0' },
   },
   {
     id: 'cc0-edm-simple-drumbeat',
@@ -1205,6 +1217,158 @@ export const LOOPS: LoopDef[] = [
       pattern('....x.......x...', st, 4, (t, _a, i) => clap(c, t, 1120 + i, 0.6));
     },
   },
+
+  // ---------------------------------------------------------------- Aero (Frutiger Aero: glossy, airy, bright)
+  {
+    id: 'aero-bubble-pluck',
+    key: 'C',
+    name: 'Bubble Plucks',
+    genre: 'Aero',
+    kind: 'synth',
+    bpm: 110,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      const st = s16(bpm);
+      // C – G – Am – F, glassy sine/triangle plucks in a rolling arpeggio
+      const chords = [[60, 64, 67, 72], [55, 59, 62, 67], [57, 60, 64, 69], [53, 57, 60, 65]];
+      const notes: SynthNote[] = [];
+      for (let i = 0; i < 64; i++) notes.push({ t: i * st, dur: st * 0.9, note: chords[i >> 4][[0, 2, 1, 3][i % 4]] + 12, vel: i % 2 ? 0.6 : 1 });
+      synth(c, notes, { wave: 'tri', cutoff: 7000, envMod: 4000, envDecay: 0.04, gain: 0.35, width: 1, release: 0.25 });
+      synth(c, chords.map((ch, bar) => ({ t: bar * 16 * st, dur: 15 * st, note: ch[0] - 24 })), { wave: 'sine', cutoff: 400, gain: 0.5 });
+      pattern('x...x...x...x...', st, 4, (t) => kick(c, t, { f0: 140, f1: 50, decay: 0.2, drive: 1.6, gain: 1 }));
+      pattern('xxxxxxxxxxxxxxxx', st, 4, (t, _a, i) => hat(c, t, 1200 + i, { decay: 0.02, gain: i % 2 ? 0.06 : 0.12, pan: i % 2 ? 0.5 : -0.5 }));
+    },
+  },
+  {
+    id: 'aero-glass-pad',
+    key: 'G',
+    name: 'Glass Sky Pad',
+    genre: 'Aero',
+    kind: 'synth',
+    bpm: 100,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      const bar = (4 * 60) / bpm;
+      // G – Em – G – D, wide airy pad with soft chimes on top
+      const chords: [number, number[]][] = [[55, MAJOR], [52, MINOR], [55, MAJOR], [50, MAJOR]];
+      const notes: SynthNote[] = [];
+      chords.forEach(([r, iv], b) => iv.forEach((x) => notes.push({ t: b * bar, dur: bar * 0.96, note: r + 12 + x })));
+      synth(c, notes, { wave: 'supersaw', cutoff: 2600, res: 0.4, detune: 12, gain: 0.22, attack: 0.05, release: 0.3, width: 1 });
+      synth(c, chords.map(([r], b) => ({ t: b * bar, dur: bar * 0.96, note: r - 12 })), { wave: 'sine', cutoff: 300, gain: 0.5 });
+      const chime: SynthNote[] = [79, 83, 86, 91, 86, 83, 79, 74].map((n, i) => ({ t: i * bar * 0.5, dur: 0.2, note: n, vel: 0.5 }));
+      synth(c, chime, { wave: 'sine', cutoff: 9000, gain: 0.12, release: 0.8 });
+      const st = s16(bpm);
+      pattern('x...x...x...x...', st, 4, (t) => kick(c, t, { f0: 140, f1: 48, decay: 0.22, drive: 1.6, gain: 1 }));
+      pattern('..x...x...x...x.', st, 4, (t, _a, i) => hat(c, t, 1270 + i, { decay: 0.06, gain: 0.18 }));
+      pattern('....x.......x...', st, 4, (t, _a, i) => clap(c, t, 1280 + i, 0.45));
+    },
+  },
+  {
+    id: 'aero-chill-beat',
+    name: 'Chill Aero Beat',
+    genre: 'Aero',
+    kind: 'drums',
+    bpm: 100,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      const st = s16(bpm);
+      pattern('x.....x...x.....', st, 4, (t) => kick(c, t, { f0: 110, f1: 48, decay: 0.25, drive: 1.2 }));
+      pattern('....x.......x...', st, 4, (t, _a, i) => snare(c, t, 1210 + i, { gain: 0.5, tone: 330, decay: 0.08, bright: 0.4 }));
+      pattern('x.x.x.x.x.x.x.x.', st, 4, (t, _a, i) => hat(c, t, 1220 + i, { decay: 0.04, gain: 0.15, pan: Math.sin(i) * 0.6 }));
+      pattern('.......x.......x', st, 4, (t, _a, i) => hat(c, t, 1240 + i, { decay: 0.12, gain: 0.12 }));
+    },
+  },
+  {
+    id: 'aero-water-arp',
+    key: 'D',
+    name: 'Water Arp',
+    genre: 'Aero',
+    kind: 'synth',
+    bpm: 120,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      const st = s16(bpm);
+      // D – A – Bm – G, droplet-like bells in two octaves
+      const roots = [62, 57, 59, 55];
+      const notes: SynthNote[] = [];
+      for (let i = 0; i < 64; i++) {
+        const r = roots[i >> 4];
+        const minor = (i >> 4) === 2;
+        notes.push({ t: i * st, dur: st * 0.5, note: r + [0, minor ? 3 : 4, 7, 12, 19, 12, 7, minor ? 3 : 4][i % 8] + 12, vel: 0.7 });
+      }
+      synth(c, notes, { wave: 'sine', cutoff: 9000, gain: 0.35, release: 0.35, width: 0.9 });
+      synth(c, roots.map((r, bar) => ({ t: bar * 16 * st, dur: 15 * st, note: r - 24 })), { wave: 'sine', cutoff: 300, gain: 0.55 });
+      pattern('x...x...x...x...', st, 4, (t) => kick(c, t, { f0: 130, f1: 50, decay: 0.2, drive: 1.2, gain: 0.75 }));
+      pattern('....x.......x...', st, 4, (t, _a, i) => clap(c, t, 1250 + i, 0.4));
+    },
+  },
+  {
+    id: 'aero-sunrise-house',
+    key: 'A',
+    name: 'Sunrise House',
+    genre: 'Aero',
+    kind: 'synth',
+    bpm: 122,
+    bars: 4,
+    steadyBeat: true,
+    render(c, bpm) {
+      // A – F#m – D – E, soft major-key house chords, sidechained
+      const beat = 60 / bpm;
+      const notes = chordStabs([[57, MAJOR], [54, MINOR], [50, MAJOR], [52, MAJOR]], [2, 6, 10, 14], bpm, 1.6);
+      synth(c, notes, { wave: 'saw', cutoff: 2200, envMod: 1500, envDecay: 0.1, res: 0.5, gain: 0.4, width: 0.8, pump: { beat, depth: 0.6 } });
+      synth(c, [0, 1, 2, 3].map((b) => ({ t: b * 4 * beat, dur: 3.9 * beat, note: [45, 42, 38, 40][b] - 12 })), { wave: 'sine', cutoff: 300, gain: 0.55, pump: { beat, depth: 0.7 } });
+      const st = s16(bpm);
+      pattern('x...x...x...x...', st, 4, (t) => kick(c, t, { f0: 140, f1: 48, decay: 0.24, drive: 1.4 }));
+      pattern('..x...x...x...x.', st, 4, (t, _a, i) => hat(c, t, 1260 + i, { decay: 0.09, gain: 0.25 }));
+    },
+  },
+  ...(
+    [
+      ['aero-water-drops', 'Water Drops', 2.5, (c: Canvas) => {
+        // droplets: short sine blips with a fast upward pitch bend
+        const rnd = noise(1301);
+        for (let k = 0; k < 9; k++) {
+          const t = k * 0.24 + (rnd() + 1) * 0.04;
+          const f0 = 700 + ((k * 397) % 900);
+          let ph = 0;
+          for (let i = 0; i < 0.12 * c.sr; i++) {
+            const s = i / c.sr;
+            ph += (f0 * (1 + 2.5 * s / 0.12)) / c.sr;
+            const v = Math.sin(TAU * ph) * Math.exp(-s / 0.03) * 0.6;
+            c.add(Math.round(t * c.sr) + i, v * (k % 2 ? 0.6 : 1), v * (k % 2 ? 1 : 0.6));
+          }
+        }
+      }],
+      ['aero-bubbles', 'Bubbles', 2, (c: Canvas) => {
+        const rnd = noise(1311);
+        for (let k = 0; k < 16; k++) {
+          const t = k * 0.11 + (rnd() + 1) * 0.02;
+          const f0 = 400 + k * 60;
+          let ph = 0;
+          for (let i = 0; i < 0.06 * c.sr; i++) {
+            const s = i / c.sr;
+            ph += (f0 * (1 + 4 * s / 0.06)) / c.sr;
+            c.add(Math.round(t * c.sr) + i, Math.sin(TAU * ph) * Math.sin((Math.PI * s) / 0.06) * 0.4, Math.sin(TAU * ph * 1.01) * Math.sin((Math.PI * s) / 0.06) * 0.4);
+          }
+        }
+      }],
+      ['aero-wind-chimes', 'Wind Chimes', 4, (c: Canvas) => {
+        const notes = [84, 88, 91, 96, 93, 89, 86, 91, 98, 84];
+        notes.forEach((n, k) => synth(c, [{ t: k * 0.27 + (k % 3) * 0.05, dur: 0.05, note: n, vel: 0.5 + (k % 3) * 0.2 }], { wave: 'sine', cutoff: 12000, gain: 0.35, release: 1.6, width: 1 }, 1320 + k));
+      }],
+      ['aero-glass-chime', 'Glass Chime', 3, (c: Canvas) => {
+        // a bright major-ninth arpeggio, bell-like
+        [72, 76, 79, 83, 86].forEach((n, k) => synth(c, [{ t: k * 0.09, dur: 0.1, note: n, vel: 0.8 }], { wave: 'tri', cutoff: 9000, gain: 0.35, release: 2, width: 0.8 }, 1330 + k));
+        sweep(c, 0, 1.5, 1340, { from: 3000, to: 12000, gainFrom: 0.15, gainTo: 0.0, res: 1 });
+      }],
+    ] as [string, string, number, (c: Canvas) => void][]
+  ).map(
+    ([id, name, seconds, render]): LoopDef => ({ id, name, genre: 'Aero', kind: 'sfx', bpm: 0, bars: 0, seconds, steadyBeat: false, render }),
+  ),
 
   // ---------------------------------------------------------------- FX one-shots
   {

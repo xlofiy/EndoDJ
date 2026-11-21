@@ -284,6 +284,12 @@ export class UI {
     ] as const) {
       $(cls, root).onclick = () => this.control(`deck${n}.${control}`, 1);
     }
+    const mixMark = () => {
+      const p = this.app.automix.enabled ? this.app.automix.plan : null;
+      return p && p.deck === i ? p : null;
+    };
+    ui.overview.mixMark = mixMark;
+    ui.zoom.mixMark = mixMark;
     const parts = this.app.engine.strips[i].parts;
     root.querySelectorAll<HTMLButtonElement>('[data-part]').forEach((b) => {
       b.onclick = () => {
@@ -810,6 +816,7 @@ export class UI {
     const body = $('#controller-body');
     if (full || !body.querySelector('#midi-monitor')) {
       const tempoInverted = midi.mapper.bindingsFor('deck1.tempo').some((b) => b.invert);
+      const xfInverted = midi.mapper.bindingsFor('mixer.crossfader').some((b) => b.invert);
       body.innerHTML = `
         ${midi.error ? `<p class="error">${esc(midi.error)}</p>` : ''}
         <div class="field"><span>MIDI input</span><select id="midi-input"></select></div>
@@ -823,6 +830,8 @@ export class UI {
           <button id="midi-mon-clear">Clear</button></div>
         <pre id="midi-monitor" class="mono"></pre>
         <div class="field"><span>Tempo faders</span><label class="inline"><input type="checkbox" id="tempo-inv" ${tempoInverted ? 'checked' : ''}/> invert direction</label></div>
+        <div class="field"><span>Crossfader</span><label class="inline"><input type="checkbox" id="xf-inv" ${xfInverted ? 'checked' : ''}/> invert direction</label>
+          <span class="muted">tick or untick if the A side plays deck B</span></div>
         <h3>Mapping</h3>
         <div class="field"><button id="map-reset">Reset to DDJ-FLX2 default</button><button id="map-export">Export…</button><button id="map-import">Import…</button>
           <span id="learn-status" class="muted"></span></div>
@@ -841,13 +850,16 @@ export class UI {
         midi.monitorLog = [];
         this.renderController(false);
       };
-      const inv = $<HTMLInputElement>('#tempo-inv', body);
-      inv.onchange = () => {
-        const bs = midi.mapper.getBindings().map((b) => (/^deck\d\.tempo$/.test(b.control) ? { ...b, invert: inv.checked } : b));
-        midi.mapper.setBindings(bs);
-        midi.saveBindings();
-        this.renderController(true);
+      const invert = (id: string, match: (control: string) => boolean) => {
+        const box = $<HTMLInputElement>(id, body);
+        box.onchange = () => {
+          midi.mapper.setBindings(midi.mapper.getBindings().map((b) => (match(b.control) ? { ...b, invert: box.checked } : b)));
+          midi.saveBindings();
+          this.renderController(true);
+        };
       };
+      invert('#tempo-inv', (c) => /^deck\d\.tempo$/.test(c));
+      invert('#xf-inv', (c) => c === 'mixer.crossfader');
       $('#map-reset', body).onclick = () => {
         if (confirm('Replace your MIDI mapping with the DDJ-FLX2 default?')) {
           midi.resetBindings();

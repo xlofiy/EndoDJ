@@ -101,6 +101,21 @@ ipcMain.handle('endodj:pick-folder', async (event) => {
   return { root, files };
 });
 
+// re-read every music folder the user added, so new files and sub-folders show up
+ipcMain.handle('endodj:rescan', async (event) => {
+  if (!fromOurPage(event)) return null;
+  const files = [];
+  for (const root of grants) {
+    try {
+      if (!(await fs.promises.stat(root)).isDirectory()) continue;
+    } catch {
+      continue; // folder moved or drive unplugged
+    }
+    await walk(root, root, files);
+  }
+  return { root: null, files };
+});
+
 ipcMain.handle('endodj:pick-files', async (event) => {
   if (!fromOurPage(event)) return null;
   const win = BrowserWindow.fromWebContents(event.sender);

@@ -33,6 +33,7 @@ const GENRE_COLORS: Record<Genre, string> = {
   Rave: '#d98a00',
   Techno: '#4c5fc7',
   Eurobeat: '#e0368c',
+  Aero: '#22b8c9',
   Hardstyle: '#c62f3a',
   'Jersey Club': '#1d9e6a',
   Scene: '#d13b8f',
@@ -107,8 +108,25 @@ export class LibraryView {
     return this.rows.map((r) => r.id);
   }
 
+  private lastRescan = 0;
+
+  /** Pick up new files / sub-folders in the music folders (start-up, window focus, ⟳ button). */
+  async rescan(manual = false): Promise<void> {
+    if (!manual && Date.now() - this.lastRescan < 20000) return;
+    this.lastRescan = Date.now();
+    try {
+      const n = await this.app.library.rescan();
+      if (n || manual) this.toast(n ? `Found ${n} new or moved tracks.` : 'No new tracks.');
+    } catch (e) {
+      if (manual) this.toast(`Rescan failed: ${(e as Error).message}`, true);
+    }
+  }
+
   init(): void {
     const lib = this.app.library;
+    window.setInterval(() => this.view === AUTOMIX_ID && this.updateNext(), 500);
+    void this.rescan();
+    window.addEventListener('focus', () => void this.rescan());
     lib.on(() => this.schedule());
     this.app.automix.onChange = () => this.schedule();
     for (const d of this.app.engine.decks) {
@@ -256,7 +274,7 @@ export class LibraryView {
       item('all', 'All tracks', lib.tracks.size, false) +
       item(LOOPLAB_VIEW, 'Loop Lab', LOOPS.length, false) +
       item(HISTORY_ID, 'History', lib.sessionHistory().length, false) +
-      (folders.length ? '<div class="label group">Folders</div>' : '') +
+      (folders.length ? '<div class="label group folders-head">Folders<button id="rescan" title="Look for new files and sub-folders">⟳</button></div>' : '') +
       folders.map((f) => item(FOLDER + f.path, f.name, f.count, false, f.depth)).join('') +
       '<div class="label group">Playlists</div>' +
       lib.playlists
@@ -294,6 +312,7 @@ export class LibraryView {
         };
       }
     });
+    side.querySelector<HTMLButtonElement>('#rescan')?.addEventListener('click', () => void this.rescan(true));
     el('#new-playlist').onclick = async () => {
       const name = prompt('Playlist name', `Set ${new Date().toLocaleDateString()}`);
       if (name) {
@@ -336,7 +355,18 @@ export class LibraryView {
     let html = `
       <span class="tabs"><button data-tab="queue" class="${this.amTab === 'queue' ? 'on' : ''}">Queue (${queueLen})</button><button data-tab="suggest" class="${this.amTab === 'suggest' ? 'on' : ''}" title="Tracks that mix well after what is on deck A / B">Suggestions</button></span>
       <button id="am-toggle" class="chip ${am.enabled ? 'on' : ''}" title="Mix through this queue automatically: beat-matched crossfades before each track ends; tracks alternate between deck A and B">Automix ${am.enabled ? 'on' : 'off'}</button>
-      <label>Crossfade <input id="am-fade" type="number" min="2" max="60" step="1" value="${am.fadeSeconds}" /> s</label>
+      <details class="am-settings" ${this.mixSettingsOpen ? 'open' : ''}><summary>Mix settings</summary>
+        <label title="Layer songs: both songs play together for the whole blend (bass swapped halfway). Crossfade: a plain fade.">Style
+          <select id="am-style"><option value="layer" ${am.settings.style === 'layer' ? 'selected' : ''}>Layer songs</option><option value="fade" ${am.settings.style === 'fade' ? 'selected' : ''}>Crossfade</option></select></label>
+        ${
+          am.settings.style === 'layer'
+            ? `<label>Blend <select id="am-bars">${[8, 16, 32].map((b) => `<option value="${b}" ${am.settings.blendBars === b ? 'selected' : ''}>${b} bars</option>`).join('')}</select></label>`
+            : `<label>Crossfade <input id="am-fade" type="number" min="2" max="60" step="1" value="${am.settings.fadeSeconds}" /> s</label>`
+        }
+        <label title="Shift the incoming track's key when it clashes with the playing one (key lock keeps the tempo)"><input id="am-harm" type="checkbox" ${am.settings.harmonic ? 'checked' : ''} /> Match keys</label>
+        <label title="Play a drum loop of the genre over every mix: a third channel on top of the two songs"><input id="am-loopmix" type="checkbox" ${am.settings.loopEveryMix ? 'checked' : ''} /> Loop layer on every mix</label>
+      </details>
+      <span id="am-next" class="am-next"></span>
       <span class="sep"></span>
       <button id="am-save" title="Save the queue (tracks and layers) as a playlist">Save set</button>
       <select id="am-load" title="Put a saved set or playlist into the queue"><option value="">Load set…</option>${saved.map((p) => `<option value="${esc(p.id)}">${esc(p.name)} (${p.trackIds.length})</option>`).join('')}</select>
@@ -373,6 +403,9 @@ export class LibraryView {
             : `<span class="muted">${genre ? `No ${genre} loops fit this key.` : 'Put tracks in genre folders (e.g. Song MP3s/Techno) for loop layers.'}</span>`
         }`;
     }
+    // re-rendered on every library change (e.g. each analysed track): keep the DOM (focus, open panel) when nothing changed
+    if (html === this.subbarHtml) return;
+    this.subbarHtml = html;
     bar.innerHTML = html;
     bar.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((b) => {
       b.onclick = () => {
@@ -381,11 +414,16 @@ export class LibraryView {
       };
     });
     el('#am-toggle').onclick = () => (am.enabled ? am.setEnabled(false) : void this.startAutomix());
-    const fade = el<HTMLInputElement>('#am-fade');
-    fade.onchange = () => {
-      am.fadeSeconds = Math.max(2, Math.min(60, parseFloat(fade.value) || 12));
-      fade.value = String(am.fadeSeconds);
-    };
+    const details = bar.querySelector<HTMLDetailsElement>('.am-settings')!;
+    details.querySelector('summary')!.addEventListener('click', () => (this.mixSettingsOpen = !details.open));
+    el<HTMLSelectElement>('#am-style').onchange = (e) => am.setSettings({ style: (e.target as HTMLSelectElement).value as 'fade' | 'layer' });
+    bar.querySelector<HTMLSelectElement>('#am-bars')?.addEventListener('change', (e) => am.setSettings({ blendBars: parseInt((e.target as HTMLSelectElement).value, 10) }));
+    bar.querySelector<HTMLInputElement>('#am-fade')?.addEventListener('change', (e) => {
+      am.setSettings({ fadeSeconds: Math.max(2, Math.min(60, parseFloat((e.target as HTMLInputElement).value) || 12)) });
+    });
+    el<HTMLInputElement>('#am-harm').onchange = (e) => am.setSettings({ harmonic: (e.target as HTMLInputElement).checked });
+    el<HTMLInputElement>('#am-loopmix').onchange = (e) => am.setSettings({ loopEveryMix: (e.target as HTMLInputElement).checked });
+    this.updateNext();
     el('#am-save').onclick = () => void this.saveSet();
     const load = el<HTMLSelectElement>('#am-load');
     load.onchange = () => void this.loadSet(load.value);
@@ -439,6 +477,28 @@ export class LibraryView {
     await lib.setPlaylist(AUTOMIX_ID, [...p.trackIds]);
     this.amTab = 'queue';
     this.toast(`"${p.name}" is in the queue. Switch Automix on to play it.`);
+  }
+
+  private mixSettingsOpen = false;
+  private subbarHtml = '';
+
+  /** "Next: … · mix in 0:42" in the Automix bar (called twice a second while the view is open) */
+  updateNext(): void {
+    const span = document.getElementById('am-next');
+    if (!span) return;
+    const am = this.app.automix;
+    const p = am.plan;
+    let text = '';
+    if (am.enabled && p) {
+      const d = this.app.engine.decks[p.deck];
+      const secs = (p.start - d.time) / Math.max(0.01, Math.abs(d.tempoFactor));
+      const deck = p.deck ? 'A' : 'B';
+      text =
+        secs > 0
+          ? `Next on ${deck}: ${p.next} · mix in ${Math.floor(secs / 60)}:${String(Math.floor(secs % 60)).padStart(2, '0')}`
+          : `Mixing into ${p.next} (${deck}) · ${Math.round(Math.min(1, (d.time - p.start) / Math.max(0.1, p.end - p.start)) * 100)} %`;
+    } else if (am.enabled) text = 'Automix on';
+    if (span.textContent !== text) span.textContent = text;
   }
 
   private setFolder = '';

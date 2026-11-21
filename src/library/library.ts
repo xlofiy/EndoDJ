@@ -58,11 +58,14 @@ interface NativeAPI {
   };
   pickFolder(): Promise<{ root: string | null; files: NativeFile[] } | null>;
   pickFiles(): Promise<{ root: string | null; files: NativeFile[] } | null>;
+  rescan(): Promise<{ root: string | null; files: NativeFile[] } | null>;
   readFile(path: string): Promise<ArrayBuffer>;
 }
 export const native: NativeAPI | undefined = (window as unknown as { endodjNative?: NativeAPI }).endodjNative;
 
 export const HISTORY_ID = '__history__';
+/** IndexedDB 'handles' key prefix for imported folders (browser), used by rescan */
+const DIR_KEY = 'dir:';
 export const AUTOMIX_ID = '__automix__';
 
 export class Library {
@@ -123,15 +126,20 @@ export class Library {
   }
 
   /** Desktop app: add files picked in a native dialog (persist across restarts by path). */
-  private async addNative(files: NativeFile[]): Promise<number> {
+  private async addNative(files: NativeFile[], onlyNew = false): Promise<number> {
+    // shortcut: a rescan adds and follows moved files; files deleted from disk stay listed until you remove them
     const added: TrackRecord[] = [];
     for (const f of files) {
       const id = trackId(f.name, f.size, f.lastModified);
+      const old = this.tracks.get(id);
+      if (onlyNew && old && old.path === f.relativePath && old.nativePath === f.path) continue;
+      if (old) old.path = f.relativePath; // moved into another (sub-)folder
       const rec = this.tracks.get(id) ?? this.newRecord(id, f.name, f.size, f.lastModified, f.relativePath);
       rec.nativePath = f.path;
       this.tracks.set(id, rec);
       added.push(rec);
     }
+    if (!added.length) return 0;
     await this.db.putMany('tracks', added);
     this.emit();
     return added.length;
@@ -182,6 +190,11 @@ export class Library {
     }
     const picker = (window as unknown as { showDirectoryPicker: (o?: object) => Promise<DirHandle> }).showDirectoryPicker;
     const dir = await picker({ id: 'endodj-music', mode: 'read' });
+    await this.db.put('handles', dir, DIR_KEY + dir.name); // remembered for rescans
+    return this.walkFolder(dir, false);
+  }
+
+  private async walkFolder(dir: DirHandle, onlyNew: boolean): Promise<number> {
     const added: TrackRecord[] = [];
     const walk = async (d: DirHandle, prefix: string) => {
       for await (const entry of d.values()) {
@@ -189,14 +202,39 @@ export class Library {
         else if (isAudioFile(entry.name)) {
           const fh = entry as FileHandle;
           const file = await fh.getFile();
+          if (onlyNew && this.tracks.has(trackId(file.name, file.size, file.lastModified))) continue;
           added.push(await this.addFile(file, prefix + entry.name, fh));
         }
       }
     };
     await walk(dir, `${dir.name}/`);
-    await this.db.putMany('tracks', added);
-    this.emit();
+    if (added.length) {
+      await this.db.putMany('tracks', added);
+      this.emit();
+    }
     return added.length;
+  }
+
+  /**
+   * Look for new files and sub-folders in the music folders added before (no prompts: folders the
+   * browser no longer lets us read are skipped). Returns the number of new tracks.
+   */
+  async rescan(): Promise<number> {
+    if (native) {
+      const res = await native.rescan();
+      return res ? this.addNative(res.files, true) : 0;
+    }
+    let n = 0;
+    for (const [key, h] of await this.db.entries<DirHandle>('handles')) {
+      if (typeof key !== 'string' || !key.startsWith(DIR_KEY)) continue;
+      try {
+        if (h.queryPermission && (await h.queryPermission({ mode: 'read' })) !== 'granted') continue;
+        n += await this.walkFolder(h, true);
+      } catch {
+        /* folder gone */
+      }
+    }
+    return n;
   }
 
   /** Is the audio for this track reachable right now (without a permission prompt)? */

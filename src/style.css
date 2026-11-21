@@ -1509,3 +1509,38 @@ body.lowfx .sun::after {
 #lib-subbar {
   row-gap: 4px;
 }
+#lib-sidebar .folders-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+#lib-sidebar .folders-head button {
+  height: 20px;
+  min-height: 0;
+  padding: 0 6px;
+  font-size: 12px;
+}
+#lib-subbar .am-settings {
+  display: inline-flex;
+}
+#lib-subbar .am-settings[open] {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  order: 10;
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+  background: rgb(255 255 255 / 0.18);
+}
+#lib-subbar .am-settings summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+}
+#lib-subbar .am-next {
+  margin-left: auto;
+  font-weight: 600;
+  color: var(--accent);
+}

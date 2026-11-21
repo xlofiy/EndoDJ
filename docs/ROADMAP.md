@@ -49,7 +49,7 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not started
 - [ ] More CC0 content from Freesound (needs a Freesound API key)
 - [x] Auto-update from GitHub Releases
 - [ ] Code-signed installers (Windows certificate)
-- [x] 91 Loop Lab sounds incl. Eurobeat, Hardstyle and Jersey Club (synthesised; no usable CC0 loops found for those)
+- [x] 101 Loop Lab sounds incl. Aero, Eurobeat, Hardstyle and Jersey Club (synthesised; no usable CC0 loops found for those)
 
 ## Phase 3 — Beyond
 - [~] Track parts: PARTS cuts bass / vocal (centre) / instru (sides) / hats with a frequency + stereo split

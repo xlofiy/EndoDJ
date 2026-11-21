@@ -26,9 +26,9 @@ describe('MidiMapper', () => {
     const fine = m.handle([0xb0, 0x33, 0x7f]);
     expect(fine[0]).toMatchObject({ control: 'deck1.volume' });
     expect(fine[0].value).toBeCloseTo(((0x40 << 7) | 0x7f) / 16383);
-    // full scale
+    // full scale (the FLX2 crossfader is inverted: full scale = all the way to deck A)
     m.handle([0xb6, 0x1f, 0x7f]);
-    expect(m.handle([0xb6, 0x3f, 0x7f])[0]).toEqual({ control: 'mixer.crossfader', kind: 'knob', value: 1 });
+    expect(m.handle([0xb6, 0x3f, 0x7f])[0]).toEqual({ control: 'mixer.crossfader', kind: 'knob', value: 0 });
   });
 
   it('decodes jog wheel (centred on 64) and browse encoder (two’s complement)', () => {

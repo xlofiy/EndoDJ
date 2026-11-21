@@ -13,6 +13,7 @@ export interface MidiPort {
 }
 
 const STORAGE_KEY = 'endodj.midi.bindings.v1';
+const XFADE_FIX_KEY = 'endodj.midi.xfadeFix';
 
 export class MidiController {
   readonly mapper: MidiMapper;
@@ -41,12 +42,30 @@ export class MidiController {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as MidiBinding[];
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) return MidiController.migrate(parsed);
       }
     } catch {
       /* corrupt or unavailable storage → defaults */
     }
     return ddjFlx2Bindings();
+  }
+
+  /** One-time fixes for mappings saved by older versions. */
+  static migrate(bindings: MidiBinding[]): MidiBinding[] {
+    try {
+      if (localStorage.getItem(XFADE_FIX_KEY)) return bindings;
+      localStorage.setItem(XFADE_FIX_KEY, '1');
+    } catch {
+      return bindings;
+    }
+    // the FLX2 crossfader runs B→A: saved mappings from before that was known get it flipped once
+    const fixed = bindings.map((b) => (b.control === 'mixer.crossfader' && b.channel === 6 && b.number === 0x1f ? { ...b, invert: !b.invert } : b));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(fixed));
+    } catch {
+      /* storage unavailable */
+    }
+    return fixed;
   }
 
   saveBindings(): void {

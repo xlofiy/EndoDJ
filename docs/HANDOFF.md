@@ -101,6 +101,13 @@ FX → history → automix crossfade), with no console errors:
   run 16 bars over the next song, the finished deck loads the next track at once; compact layout keeps 8 small pads;
   Loop Lab list grouped by genre (FX last) with a sampler-pad strip (+ Pad / drag onto a pad); 11 more loops,
   12 more FX one-shots (91 sounds).
+- **Session 8**: Automix plans each mix-out (`src/app/mixplan.ts`, tested: outro start, else last 8-bar phrase that
+  fits; never past the end), blend styles 'layer' (both songs at full level through the middle, 8/16/32 bars) or
+  'fade', key matching, loop layer on every mix; plan shown as a gold MIX zone on zoom + overview and a countdown in
+  the Automix bar; settings persisted (`endodj.automix.v1`). Library rescans the added folders (start-up, window
+  focus, ⟳) — desktop via `endodj:rescan`, browser via stored directory handles. FLX2 crossfader inverted by default
+  (user report on real hardware) with a one-time migration of saved mappings and a Controller-settings toggle.
+  Aero genre (1 CC0 + 5 synthesised loops, 4 one-shots). Automix bar no longer rebuilt when unchanged.
 - **Fixes**: BPM low-band ripple (40-60 Hz kicks could pull the tempo to 3/4); a track loaded while
   background analysis ran lost its beat grid; Web Audio low/high-pass Q is in dB.
 

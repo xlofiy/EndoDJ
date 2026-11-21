@@ -46,6 +46,7 @@ Keys are labelled only where detection was confident (margin ≥ 0.05).
 | `cc0-eurobeat-fever-stadium.ogg` | [Fever Stadium](https://opengameart.org/content/fever-stadium) (bpm165 version) — MintoDog | 8 bars from 64.001 s | 165 | — (unclear) |
 | `cc0-eurobeat-fever-climax.ogg` | [Fever Stadium](https://opengameart.org/content/fever-stadium) (climax, bpm180 version) — MintoDog | 8 bars from 64.004 s | 180 | — (unclear) |
 | `cc0-eurobeat-super-santa.ogg` | [Super Santa Claus](https://opengameart.org/content/super-santa-claus) — MintoDog | 8 bars from 84.854 s | 170 | Am |
+| `cc0-aero-brassy-bubbles.ogg` | [Brassy Bubbles](https://opengameart.org/content/brassy-bubbles) — Technodono | 8 bars from 64.200 s | 120 | G |
 | `cc0-edm-simple-drumbeat.ogg` | [simple drumbeat](https://opengameart.org/content/simple-drumbeat) (body) — Turnovus | 8 bars from 20.578 s | 140 | — |
 | `cc0-rave-wuffly.ogg` | [Things Got a Bit Ravey in Wuffly Land Tonight](https://opengameart.org/content/things-got-a-bit-ravey-in-wuffly-land-tonight) — Spring Spring | 8 bars from 268.865 s | 125 | — (unclear) |
 
@@ -64,5 +65,6 @@ Keys are labelled only where detection was confident (margin ≥ 0.05).
 No CC0 breakcore, hyperpop or scene loops passed the checks; those genres use EndoDJ's own
 synthesised loops (`src/loops/catalog.ts`, MIT). The same goes for Hardstyle and Jersey Club: the only
 CC0 hardstyle material found (OpenGameArt, "Hardstyler" by Of Far Different Nature) is a 28 s track
-without a clear, loopable tempo, so it is not bundled. Freesound.org was not usable from the build
+without a clear, loopable tempo, so it is not bundled. Two CC0 chill tracks for Aero ("Calm Loop" by wipics,
+"Calm Ambient 2") failed the tempo re-check after cutting and are not bundled either. Freesound.org was not usable from the build
 environment (it rejects automated requests; its API needs a personal key).

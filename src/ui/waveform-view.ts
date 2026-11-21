@@ -19,6 +19,9 @@ function barLabel(n: number): string {
   return (barLabels[n] ??= String(n));
 }
 
+/** Automix's planned blend out of this deck (track seconds), or null */
+export type MixMark = () => { start: number; end: number; next: string } | null;
+
 /** Resize a canvas' backing store to its CSS size × devicePixelRatio. Returns true if resized. */
 export function fitCanvas(c: HTMLCanvasElement): boolean {
   const dpr = window.devicePixelRatio || 1;
@@ -40,6 +43,7 @@ export class OverviewView {
 
   /** intro / drop / break … of the loaded track (empty until the grid and waveform are known) */
   sections: Section[] = [];
+  mixMark: MixMark = () => null;
 
   constructor(readonly canvas: HTMLCanvasElement, private deck: Deck) {
     canvas.title = 'Click to jump · click the coloured strip on top to jump to the start of a section';
@@ -113,7 +117,8 @@ export class OverviewView {
     }
     // skip the redraw when nothing visible changed (paused decks cost nothing)
     const px = deck.duration ? Math.round((deck.time / deck.duration) * canvas.width) : -1;
-    const sig = `${px}|${deck.cuePoint}|${deck.hotcues.join(',')}|${deck.loop?.start}|${deck.loop?.end}|${deck.loopActive}|${deck.loaded}`;
+    const mix = this.mixMark();
+    const sig = `${px}|${mix?.start}|${mix?.end}|${deck.cuePoint}|${deck.hotcues.join(',')}|${deck.loop?.start}|${deck.loop?.end}|${deck.loopActive}|${deck.loaded}`;
     if (!cacheStale && sig === this.last) return;
     this.last = sig;
     const g = canvas.getContext('2d')!;
@@ -132,6 +137,14 @@ export class OverviewView {
       const lx = (deck.loop.start / deck.duration) * W;
       g.fillRect(lx, 0, Math.max(2, ((deck.loop.end - deck.loop.start) / deck.duration) * W), H);
     }
+    // Automix: where this track hands over to the next one
+    if (mix) {
+      const mx = (mix.start / deck.duration) * W;
+      g.fillStyle = 'rgba(255,196,64,0.35)';
+      g.fillRect(mx, 0, Math.max(3, ((mix.end - mix.start) / deck.duration) * W), H);
+      g.fillStyle = '#ffc440';
+      g.fillRect(mx - 1, 0, 2, H);
+    }
     // cue + hot cues
     g.fillStyle = '#ffb020';
     g.fillRect((deck.cuePoint / deck.duration) * W - 1, 0, 2, H);
@@ -149,6 +162,7 @@ export class OverviewView {
 export class ZoomView {
   /** seconds visible on each side of the playhead */
   span = 4;
+  mixMark: MixMark = () => null;
   private dragging: { x: number; wasPlaying: boolean } | null = null;
 
   constructor(readonly canvas: HTMLCanvasElement, private deck: Deck, private color: string) {
@@ -186,7 +200,8 @@ export class ZoomView {
   draw(): void {
     const { canvas, deck } = this;
     const resized = fitCanvas(canvas);
-    const sig = `${deck.time.toFixed(4)}|${this.span}|${deck.tempoFactor}|${deck.waveform ? 1 : 0}|${deck.grid?.bpm}|${deck.grid?.firstBeat}|${deck.cuePoint}|${deck.hotcues.join(',')}|${deck.loop?.start}|${deck.loop?.end}|${deck.loopActive}|${deck.loaded}`;
+    const mix = this.mixMark();
+    const sig = `${deck.time.toFixed(4)}|${mix?.start}|${mix?.end}|${this.span}|${deck.tempoFactor}|${deck.waveform ? 1 : 0}|${deck.grid?.bpm}|${deck.grid?.firstBeat}|${deck.cuePoint}|${deck.hotcues.join(',')}|${deck.loop?.start}|${deck.loop?.end}|${deck.loopActive}|${deck.loaded}`;
     if (!resized && sig === this.last) return;
     this.last = sig;
     const g = canvas.getContext('2d')!;
@@ -262,6 +277,21 @@ export class ZoomView {
         g.fillStyle = phrase ? 'rgba(255,196,64,0.95)' : 'rgba(255,255,255,0.7)';
         g.fillRect(x - 1, 0, phrase ? 3 : 2, H);
         g.fillText(barLabel(bar + 1), x + 4, H - 4 * dpr);
+      }
+    }
+
+    // Automix: the blend zone, labelled with the track that comes in
+    if (mix) {
+      const x0 = (mix.start - t0) * pxPerSec;
+      const x1 = (mix.end - t0) * pxPerSec;
+      if (x1 > 0 && x0 < W) {
+        const dpr = window.devicePixelRatio || 1;
+        g.fillStyle = 'rgba(255,196,64,0.16)';
+        g.fillRect(x0, 0, x1 - x0, H);
+        g.fillStyle = '#ffc440';
+        g.fillRect(x0 - 1, 0, 3, H);
+        g.font = `bold ${10 * dpr}px system-ui`;
+        g.fillText(`MIX → ${mix.next}`, Math.max(2, x0 + 5), H - 16 * dpr);
       }
     }
 

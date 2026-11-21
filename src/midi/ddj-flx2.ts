@@ -69,6 +69,7 @@ export function ddjFlx2Bindings(): MidiBinding[] {
   return [
     ...deckBindings(0),
     ...deckBindings(1),
-    { type: 'cc', channel: MIXER_CH, number: 0x1f, lsb: 0x3f, control: 'mixer.crossfader', kind: 'knob' },
+    // reported on a real DDJ-FLX2: the crossfader sends its maximum at the A side
+    { type: 'cc', channel: MIXER_CH, number: 0x1f, lsb: 0x3f, control: 'mixer.crossfader', kind: 'knob', invert: true },
   ];
 }
