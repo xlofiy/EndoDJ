@@ -113,6 +113,10 @@ FX → history → automix crossfade), with no console errors:
   From the top, top-bar status chip. Loading onto a playing deck replaces its track (swap after decoding); ⏏ eject.
   Automix blends at once when the DJ starts the other deck, picks the on-air deck by crossfader side, lands a
   running blend cleanly before a new Auto-set, and waits for an in-progress load.
+- **Session 10**: title / artist from tags (`extractTags` in `src/library/artwork.ts`, tested incl. real ffmpeg
+  MP3/FLAC/M4A); loudness measured in the analysis worker (`src/audio/loudness.ts`, tested) and applied as TRIM on
+  load (Settings → Audio → Auto-gain, `endodj.autogain`). Existing libraries are re-analysed once in the
+  background for loudness and tags (`TrackRecord.loudness`, `tagged`).
 - **Fixes**: BPM low-band ripple (40-60 Hz kicks could pull the tempo to 3/4); a track loaded while
   background analysis ran lost its beat grid; Web Audio low/high-pass Q is in dB.
 

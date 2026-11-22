@@ -476,6 +476,8 @@ export const GUIDES: Guide[] = [
     figure: routingSvg,
     caption: 'Headphone cue needs a separate output: split cable or a 4-channel sound card.',
     body: `<ul>
+      <li><b>Auto-gain</b> (Settings → Audio, on by default) measures every track's loudness and sets the deck's
+        <b>TRIM</b> when you load it, so quiet and loud tracks mix at the same level.</li>
       <li>In <b>Audio</b> settings, choose the output device and how headphone cue is routed.</li>
       <li><b>4 channels</b> is for sound cards with separate headphone outputs. The FLX2 has a MASTER output and a
         headphones output (per the manual), so pick the FLX2 as output device and choose 4 channels. If your browser

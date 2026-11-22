@@ -954,7 +954,8 @@ export class UI {
       </select></div>
       <p class="muted">Device reports ${eng.maxOutputChannels} output channels. Sample rate ${eng.ctx.sampleRate} Hz, base latency ${Math.round(eng.ctx.baseLatency * 1000)} ms.</p>
       <h3>Mixing</h3>
-      <div class="field"><span>Sampler volume</span><input id="smp-vol" type="range" min="0" max="1" step="0.01" value="${this.app.sampler.volume}" /></div>`;
+      <div class="field"><span>Sampler volume</span><input id="smp-vol" type="range" min="0" max="1" step="0.01" value="${this.app.sampler.volume}" /></div>
+      <div class="field"><span>Auto-gain</span><label class="inline"><input type="checkbox" id="auto-gain" ${this.app.autoGain ? 'checked' : ''}/> level every track to the same loudness (sets TRIM on load)</label></div>`;
     const mode = $<HTMLSelectElement>('#out-mode', body);
     mode.value = eng.outputMode;
     mode.onchange = () => eng.setOutputMode(mode.value as OutputMode);
@@ -981,6 +982,7 @@ export class UI {
         }
       };
     }
+    $<HTMLInputElement>('#auto-gain', body).onchange = (e) => this.app.setAutoGain((e.target as HTMLInputElement).checked);
     const vol = $<HTMLInputElement>('#smp-vol', body);
     vol.oninput = () => this.app.sampler.setVolume(parseFloat(vol.value));
   }

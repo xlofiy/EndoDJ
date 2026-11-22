@@ -3,6 +3,7 @@
 import { detectBeatGrid, mixToMono } from './bpm';
 import { detectKey, keyName } from './key';
 import { computeWaveform } from './waveform';
+import { loudnessDb } from './loudness';
 
 export interface AnalysisRequest {
   id: number;
@@ -21,6 +22,8 @@ export interface AnalysisResponse {
   confidence: number;
   /** e.g. "Am"; null = no clear key (drums, noise) or skipped */
   key: string | null;
+  /** programme loudness in dB, null for silence */
+  loudness: number | null;
   waveform: { binsPerSec: number; peaks: Float32Array; lows: Float32Array };
 }
 
@@ -29,6 +32,6 @@ self.onmessage = (e: MessageEvent<AnalysisRequest>) => {
   const waveform = computeWaveform(channels, sampleRate);
   const grid = skipBpm ? { bpm: 0, firstBeat: 0, confidence: 0 } : detectBeatGrid(channels, sampleRate);
   const k = skipKey ? null : detectKey(mixToMono(channels), sampleRate).key;
-  const res: AnalysisResponse = { id, ...grid, key: k ? keyName(k) : null, waveform };
+  const res: AnalysisResponse = { id, ...grid, key: k ? keyName(k) : null, loudness: loudnessDb(channels, sampleRate), waveform };
   (self as unknown as Worker).postMessage(res, [waveform.peaks.buffer, waveform.lows.buffer]);
 };

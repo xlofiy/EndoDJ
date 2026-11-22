@@ -22,6 +22,10 @@ export interface TrackRecord {
   path: string;
   /** absolute file path (desktop app only) */
   nativePath?: string;
+  /** programme loudness in dB (auto-gain); null = silent; undefined = not measured yet */
+  loudness?: number | null;
+  /** title / artist were read from the file's tags (or it has none) */
+  tagged?: boolean;
 }
 
 export interface PlaylistRecord {

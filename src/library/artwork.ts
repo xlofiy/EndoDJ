@@ -56,7 +56,8 @@ function sniffMime(data: Uint8Array, declared: string): string {
   return 'image/jpeg';
 }
 
-function id3(b: Uint8Array): Artwork | null {
+/** Walk the frames of an ID3v2 tag; `fn` gets each frame id and its (decoded) body. Return true to stop. */
+function id3Frames(b: Uint8Array, fn: (id: string, body: Uint8Array) => boolean | void): void {
   const ver = b[3];
   const flags = b[5];
   const size = synchsafe(b, 6);
@@ -65,7 +66,6 @@ function id3(b: Uint8Array): Artwork | null {
   let pos = 0;
   if (ver === 3 && flags & 0x40) pos = 4 + u32(tag, 0); // extended header
   if (ver === 4 && flags & 0x40) pos = synchsafe(tag, 0);
-  let best: Artwork | null = null;
   const idLen = ver === 2 ? 3 : 4;
   const headLen = ver === 2 ? 6 : 10;
   while (pos + headLen <= tag.length) {
@@ -76,11 +76,19 @@ function id3(b: Uint8Array): Artwork | null {
     const fflags = ver === 2 ? 0 : (tag[pos + 8] << 8) | tag[pos + 9];
     let body = tag.subarray(pos + headLen, pos + headLen + fsize);
     pos += headLen + fsize;
-    if (id !== 'APIC' && id !== 'PIC') continue;
     if (ver === 4) {
       if (fflags & 0x0001) body = body.subarray(4); // data length indicator
       if (fflags & 0x0002) body = deunsync(body);
     }
+    if (fn(id, body)) return;
+  }
+}
+
+function id3(b: Uint8Array): Artwork | null {
+  let best: Artwork | null = null;
+  let front: Artwork | null = null;
+  id3Frames(b, (id, body) => {
+    if (id !== 'APIC' && id !== 'PIC') return;
     const enc = body[0];
     let p = 1;
     let mime: string;
@@ -89,19 +97,22 @@ function id3(b: Uint8Array): Artwork | null {
       p = 4;
     } else {
       const end = body.indexOf(0, 1);
-      if (end < 0) continue;
+      if (end < 0) return;
       mime = ascii(body, 1, end - 1);
       p = end + 1;
     }
     const type = body[p];
     p = skipText(body, p + 1, enc);
     const data = body.subarray(p);
-    if (data.length < 8) continue;
+    if (data.length < 8) return;
     const art = { mime: sniffMime(data, mime), data };
-    if (type === FRONT_COVER) return art;
+    if (type === FRONT_COVER) {
+      front = art;
+      return true;
+    }
     best ??= art;
-  }
-  return best;
+  });
+  return front ?? best;
 }
 
 function flac(b: Uint8Array): Artwork | null {
@@ -129,10 +140,9 @@ function flac(b: Uint8Array): Artwork | null {
   return best;
 }
 
-/** Walk MP4 boxes: moov > udta > meta > ilst > covr > data. */
-function mp4(b: Uint8Array): Artwork | null {
-  const path = ['moov', 'udta', 'meta', 'ilst', 'covr', 'data'];
-  const find = (from: number, to: number, depth: number): Artwork | null => {
+/** Payload of the MP4 box at `path` (e.g. moov > udta > meta > ilst > covr > data), or null. */
+function mp4Box(b: Uint8Array, path: string[]): Uint8Array | null {
+  const find = (from: number, to: number, depth: number): Uint8Array | null => {
     let pos = from;
     while (pos + 8 <= to) {
       let size = u32(b, pos);
@@ -144,10 +154,7 @@ function mp4(b: Uint8Array): Artwork | null {
       } else if (size === 0) size = to - pos;
       if (size < header) return null;
       if (type === path[depth]) {
-        if (type === 'data') {
-          const data = b.subarray(pos + 16, pos + size); // 8 bytes: type indicator + locale
-          return data.length >= 8 ? { mime: sniffMime(data, ''), data } : null;
-        }
+        if (depth === path.length - 1) return b.subarray(pos + header, pos + size);
         const inner = type === 'meta' ? pos + header + 4 : pos + header; // meta is a full box
         return find(inner, pos + size, depth + 1);
       }
@@ -156,6 +163,12 @@ function mp4(b: Uint8Array): Artwork | null {
     return null;
   };
   return find(0, b.length, 0);
+}
+
+function mp4(b: Uint8Array): Artwork | null {
+  const box = mp4Box(b, ['moov', 'udta', 'meta', 'ilst', 'covr', 'data']);
+  const data = box?.subarray(8); // 8 bytes: type indicator + locale
+  return data && data.length >= 8 ? { mime: sniffMime(data, ''), data } : null;
 }
 
 /** Embedded cover art of an audio file, or null. Never throws on malformed input. */
@@ -168,4 +181,71 @@ export function extractArtwork(bytes: Uint8Array): Artwork | null {
     /* malformed tag: no artwork */
   }
   return null;
+}
+
+// ------------------------------------------------------------------ title / artist
+
+export interface Tags {
+  title?: string;
+  artist?: string;
+}
+
+function decodeText(b: Uint8Array, encoding: number): string {
+  let label = 'latin1';
+  if (encoding === 1) label = b[0] === 0xfe && b[1] === 0xff ? 'utf-16be' : 'utf-16le';
+  else if (encoding === 2) label = 'utf-16be';
+  else if (encoding === 3) label = 'utf-8';
+  const bom = encoding === 1 && ((b[0] === 0xff && b[1] === 0xfe) || (b[0] === 0xfe && b[1] === 0xff)) ? 2 : 0;
+  // several values are separated by NUL: keep the first, joined artists read better with " & "
+  return new TextDecoder(label).decode(b.subarray(bom)).split('\0').filter(Boolean).join(' & ').trim();
+}
+
+function le32(b: Uint8Array, at: number): number {
+  return (b[at] | (b[at + 1] << 8) | (b[at + 2] << 16) | (b[at + 3] << 24)) >>> 0;
+}
+
+/** Title and artist from ID3v2 (TIT2/TPE1, v2.2 TT2/TP1), FLAC Vorbis comments or MP4 (©nam/©ART). Never throws. */
+export function extractTags(bytes: Uint8Array): Tags {
+  const tags: Tags = {};
+  try {
+    if (ascii(bytes, 0, 3) === 'ID3') {
+      id3Frames(bytes, (id, body) => {
+        if (id === 'TIT2' || id === 'TT2') tags.title ||= decodeText(body.subarray(1), body[0]);
+        if (id === 'TPE1' || id === 'TP1') tags.artist ||= decodeText(body.subarray(1), body[0]);
+      });
+    } else if (ascii(bytes, 0, 4) === 'fLaC') {
+      let pos = 4;
+      while (pos + 4 <= bytes.length) {
+        const head = bytes[pos];
+        const len = (bytes[pos + 1] << 16) | (bytes[pos + 2] << 8) | bytes[pos + 3];
+        if ((head & 0x7f) === 4) {
+          let p = pos + 4;
+          p += 4 + le32(bytes, p); // vendor string
+          const count = le32(bytes, p);
+          p += 4;
+          for (let i = 0; i < count && p + 4 <= bytes.length; i++) {
+            const n = le32(bytes, p);
+            const c = new TextDecoder().decode(bytes.subarray(p + 4, p + 4 + n));
+            p += 4 + n;
+            const eq = c.indexOf('=');
+            const key = c.slice(0, eq).toUpperCase();
+            if (key === 'TITLE') tags.title ||= c.slice(eq + 1).trim();
+            if (key === 'ARTIST') tags.artist ||= c.slice(eq + 1).trim();
+          }
+        }
+        if (head & 0x80) break;
+        pos += 4 + len;
+      }
+    } else if (ascii(bytes, 4, 4) === 'ftyp') {
+      const text = (atom: string) => {
+        const box = mp4Box(bytes, ['moov', 'udta', 'meta', 'ilst', atom, 'data']);
+        return box ? new TextDecoder().decode(box.subarray(8)).trim() : undefined;
+      };
+      tags.title = text('\xa9nam') || undefined;
+      tags.artist = text('\xa9ART') || undefined;
+    }
+  } catch {
+    /* malformed tag: keep what was read */
+  }
+  return tags;
 }

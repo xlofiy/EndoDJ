@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractArtwork } from '../src/library/artwork';
+import { extractArtwork, extractTags } from '../src/library/artwork';
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
 const JPG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 16, 0x4a, 0x46, 0x49, 0x46, 9, 9]);
@@ -64,5 +64,42 @@ describe('extractArtwork', () => {
     expect(extractArtwork(new Uint8Array([0x52, 0x49, 0x46, 0x46, 1, 2, 3]))).toBeNull();
     expect(extractArtwork(new Uint8Array([...enc('ID3'), 3, 0, 0, 127, 127, 127, 127, 1, 2]))).toBeNull();
     expect(extractArtwork(new Uint8Array(0))).toBeNull();
+  });
+});
+
+describe('extractTags', () => {
+  const box = (type: string, payload: number[]) => [...be32(payload.length + 8), ...enc(type), ...payload];
+  const utf8 = (s: string) => Array.from(new TextEncoder().encode(s));
+  const le = (n: number) => [n & 255, (n >>> 8) & 255, (n >>> 16) & 255, (n >>> 24) & 255];
+
+  it('reads ID3v2.3 title (Latin-1) and artist (UTF-16 with BOM)', () => {
+    const artist = [1, 0xff, 0xfe, ...Array.from('Daft Ünk', (c) => [c.charCodeAt(0), 0]).flat()];
+    const tags = extractTags(id3(3, [frame(3, 'TIT2', [0, ...enc('One More Time')]), frame(3, 'TPE1', artist)]));
+    expect(tags).toEqual({ title: 'One More Time', artist: 'Daft Ünk' });
+  });
+
+  it('reads ID3v2.4 UTF-8 text and joins several artists', () => {
+    const tags = extractTags(id3(4, [frame(4, 'TPE1', [3, ...utf8('Ari'), 0, ...utf8('Björk')]), frame(4, 'TIT2', [3, ...utf8('Sky ☁')])]));
+    expect(tags).toEqual({ title: 'Sky ☁', artist: 'Ari & Björk' });
+  });
+
+  it('reads FLAC Vorbis comments', () => {
+    const comments = ['title=Blue Ice', 'ARTIST=Tsorthan'].map((c) => [...le(utf8(c).length), ...utf8(c)]).flat();
+    const block = [...le(3), ...enc('enc'), ...le(2), ...comments];
+    const bytes = new Uint8Array([...enc('fLaC'), 0x84, (block.length >> 16) & 255, (block.length >> 8) & 255, block.length & 255, ...block]);
+    expect(extractTags(bytes)).toEqual({ title: 'Blue Ice', artist: 'Tsorthan' });
+  });
+
+  it('reads MP4 ©nam / ©ART atoms', () => {
+    const item = (atom: string, text: string) => box(atom, box('data', [0, 0, 0, 1, 0, 0, 0, 0, ...utf8(text)]));
+    const ilst = box('ilst', [...item('\xa9nam', 'Clouds'), ...item('\xa9ART', 'Aero Kid')]);
+    const moov = box('moov', box('udta', box('meta', [0, 0, 0, 0, ...box('hdlr', new Array(25).fill(0)), ...ilst])));
+    const bytes = new Uint8Array([...box('ftyp', enc('M4A ')), ...moov]);
+    expect(extractTags(bytes)).toEqual({ title: 'Clouds', artist: 'Aero Kid' });
+  });
+
+  it('returns nothing for untagged or broken files', () => {
+    expect(extractTags(new Uint8Array([0xff, 0xfb, 1, 2]))).toEqual({});
+    expect(extractTags(new Uint8Array([...enc('ID3'), 3, 0, 0, 0, 0, 0, 99]))).toEqual({});
   });
 });

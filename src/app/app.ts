@@ -9,13 +9,16 @@ import type { Deck } from '../audio/deck';
 import { EFFECT_TYPES, type EffectType } from '../audio/effects';
 import type { FxTarget } from '../audio/engine';
 import { Library } from '../library/library';
+import type { TrackRecord } from '../library/db';
 import { MidiController } from '../midi/midi';
 import type { ControlEvent } from '../midi/mapping';
 import { Automix } from './automix';
 import { LoopLab } from '../loops/looplab';
 import { withNameHint } from '../loops/catalog';
 import { parseKey } from '../audio/key';
-import { extractArtwork, type Artwork } from '../library/artwork';
+import { extractArtwork, extractTags, type Artwork, type Tags } from '../library/artwork';
+import { autoGainDb } from '../audio/loudness';
+import { trimDbToKnob } from '../audio/mixmath';
 import { Sampler } from './sampler';
 import { LOOP_PREFIX } from './suggest';
 
@@ -109,17 +112,49 @@ export class App {
     });
   }
 
-  async decode(trackId: string): Promise<AudioBuffer> {
-    return (await this.decodeWithArt(trackId)).buffer;
-  }
-
   /** Decode a track and pull out its embedded cover art (read before decoding detaches the bytes). */
-  async decodeWithArt(trackId: string): Promise<{ buffer: AudioBuffer; art: Artwork | null }> {
+  async decodeWithArt(trackId: string): Promise<{ buffer: AudioBuffer; art: Artwork | null; tags: Tags }> {
     const file = await this.library.getFile(trackId);
     const data = await file.arrayBuffer();
-    const found = extractArtwork(new Uint8Array(data));
+    const bytes = new Uint8Array(data);
+    const found = extractArtwork(bytes);
     const art = found ? { mime: found.mime, data: found.data.slice() } : null;
-    return { buffer: await this.engine.ctx.decodeAudioData(data), art };
+    const tags = extractTags(bytes); // read before decoding detaches the bytes
+    return { buffer: await this.engine.ctx.decodeAudioData(data), art, tags };
+  }
+
+  /** Auto-gain: level tracks to the same loudness with the deck's TRIM (Settings → Audio). */
+  autoGain = (() => {
+    try {
+      return localStorage.getItem('endodj.autogain') !== '0';
+    } catch {
+      return true;
+    }
+  })();
+
+  setAutoGain(on: boolean): void {
+    this.autoGain = on;
+    try {
+      localStorage.setItem('endodj.autogain', on ? '1' : '0');
+    } catch {
+      /* storage unavailable */
+    }
+  }
+
+  private applyAutoGain(deckIndex: number, loudness: number | null | undefined): void {
+    if (!this.autoGain || loudness === null || loudness === undefined) return;
+    this.engine.strips[deckIndex].set('trim', trimDbToKnob(autoGainDb(loudness)));
+    this.onControl?.();
+  }
+
+  /** what analysis learned beyond BPM / key: loudness, and title / artist from the tags */
+  private extraPatch(rec: TrackRecord, loudness: number | null, tags: Tags): Partial<TrackRecord> {
+    const patch: Partial<TrackRecord> = { loudness, tagged: true };
+    if (!rec.tagged) {
+      if (tags.title) patch.title = tags.title;
+      if (tags.artist) patch.artist = tags.artist;
+    }
+    return patch;
   }
 
   async loadTrack(deckIndex: number, trackId: string): Promise<boolean> {
@@ -130,8 +165,9 @@ export class App {
     const seq = ++this.loadSeq[deckIndex];
     let buffer: AudioBuffer;
     let art: Artwork | null;
+    let tags: Tags;
     try {
-      ({ buffer, art } = await this.decodeWithArt(trackId));
+      ({ buffer, art, tags } = await this.decodeWithArt(trackId));
     } catch (e) {
       this.toast(`Could not load "${rec.title}": ${(e as Error).message}`, true);
       return false;
@@ -139,11 +175,14 @@ export class App {
     if (seq !== this.loadSeq[deckIndex]) return false; // a newer load replaced this one
     // loading onto a playing deck replaces its track (it keeps playing until the new one is ready)
     if (deck.playing) deck.pause();
-    deck.load({ id: rec.id, title: rec.title, artist: rec.artist }, buffer, {
+    const fromTags = !rec.tagged;
+    deck.load({ id: rec.id, title: (fromTags && tags.title) || rec.title, artist: (fromTags && tags.artist) || rec.artist }, buffer, {
       cuePoint: rec.cuePoint,
       hotcues: rec.hotcues,
     });
     this.loggedPlay[deckIndex] = null;
+    const loudnessKnown = rec.loudness !== undefined;
+    this.applyAutoGain(deckIndex, rec.loudness);
     if (art) {
       void coverBitmap(art).then((bmp) => {
         if (seq === this.loadSeq[deckIndex]) deck.setArtwork(bmp);
@@ -158,7 +197,8 @@ export class App {
     const res = await this.analyse(buffer, bpmKnown, keyKnown);
     if (seq !== this.loadSeq[deckIndex]) return true;
     deck.setAnalysis(bpmKnown ? null : { bpm: res.bpm, firstBeat: res.firstBeat }, res.waveform);
-    const patch: Parameters<Library['update']>[1] = { duration: buffer.duration };
+    const patch: Parameters<Library['update']>[1] = { duration: buffer.duration, ...this.extraPatch(rec, res.loudness, tags) };
+    if (!loudnessKnown) this.applyAutoGain(deckIndex, res.loudness);
     if (!keyKnown) {
       patch.key = res.key ?? '';
       deck.setKey(parseKey(res.key));
@@ -191,20 +231,17 @@ export class App {
     let done = 0;
     try {
       for (;;) {
-        const t = [...this.library.tracks.values()].find(
-          (r) => (r.bpm <= 0 || r.key === undefined || !r.duration) && !this.analysed.has(r.id) && this.library.isAvailable(r.id),
-        );
+        const needs = (r: TrackRecord) => r.bpm <= 0 || r.key === undefined || !r.duration || r.loudness === undefined || !r.tagged;
+        const t = [...this.library.tracks.values()].find((r) => needs(r) && !this.analysed.has(r.id) && this.library.isAvailable(r.id));
         if (!t) break;
         this.analysed.add(t.id);
-        const left = [...this.library.tracks.values()].filter(
-          (r) => (r.bpm <= 0 || r.key === undefined || !r.duration) && !this.analysed.has(r.id),
-        ).length;
+        const left = [...this.library.tracks.values()].filter((r) => needs(r) && !this.analysed.has(r.id)).length;
         this.onAnalysis?.(done, done + left + 1);
         try {
-          const buf = await this.decode(t.id);
+          const { buffer: buf, tags } = await this.decodeWithArt(t.id);
           const needBpm = t.bpm <= 0;
           const res = await this.analyse(buf, !needBpm, t.key !== undefined);
-          const patch: Parameters<Library['update']>[1] = { duration: buf.duration };
+          const patch: Parameters<Library['update']>[1] = { duration: buf.duration, ...this.extraPatch(t, res.loudness, tags) };
           if (needBpm) {
             patch.bpm = withNameHint(res.bpm, t.fileName);
             patch.firstBeat = res.firstBeat;

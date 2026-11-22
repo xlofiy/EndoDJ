@@ -38,7 +38,8 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not started
 - [~] Controller LED feedback (play/cue/sync/hot-cue LEDs) — implemented, unverified on hardware
 - [x] Desktop packaging (Electron) with native file access; installers for Windows/macOS/Linux built in CI (unsigned)
 - [x] Waveform colouring by frequency band (bass = warm, highs = cool)
-- [~] Track metadata: cover art from ID3 / FLAC / MP4 (title/artist still from file names)
+- [x] Track metadata: title, artist and cover art from ID3 / FLAC / MP4 tags
+- [x] Auto-gain: tracks levelled to the same loudness (gated, LUFS-style measure) via TRIM
 - [x] Beat / bar / phrase markers on the waveforms; song sections (intro / drop / break / outro) with jump
 
 ## Phase 2.5 — Scene features

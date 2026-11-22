@@ -45,6 +45,12 @@ export function trimKnobToGain(v: number): number {
   return Math.pow(10, db / 20);
 }
 
+/** Inverse of trimKnobToGain: the TRIM knob position for a gain in dB (-40 … +12). */
+export function trimDbToKnob(db: number): number {
+  db = clamp(db, -40, 12);
+  return db >= 0 ? 0.5 + (db / 12) * 0.5 : 0.5 * (1 + db / 40);
+}
+
 export interface FilterSetting {
   type: 'off' | 'lowpass' | 'highpass';
   frequency: number;
