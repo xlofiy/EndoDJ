@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en" data-theme="endo" data-mode="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="EndoDJ — free, open source DJ software" />
+    <title>EndoDJ</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3CradialGradient id='g' cx='35%25' cy='30%25' r='75%25'%3E%3Cstop offset='0' stop-color='%23ffffff'/%3E%3Cstop offset='.35' stop-color='%2391dcff'/%3E%3Cstop offset='1' stop-color='%23067fcf'/%3E%3C/radialGradient%3E%3C/defs%3E%3Ccircle cx='16' cy='16' r='14' fill='url(%23g)'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%2365c518'/%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <!-- Frutiger Aero sky: pure CSS, painted once (see style.css "sky") -->
+    <div id="sky" aria-hidden="true">
+      <div class="stars"></div>
+      <div class="sun"></div>
+      <div class="moon"></div>
+      <div class="cloud c1"></div>
+      <div class="cloud c2"></div>
+      <div class="cloud c3"></div>
+      <div class="bubble b1"></div>
+      <div class="bubble b2"></div>
+      <div class="bubble b3"></div>
+      <div class="hill"></div>
+    </div>
+
+    <div id="splash">
+      <div class="splash-box">
+        <div class="orb big" aria-hidden="true"></div>
+        <h1 class="wordmark">Endo<b>DJ</b></h1>
+        <p class="tagline">Free, open source DJ software for the DDJ-FLX2</p>
+        <button id="start-btn" class="big">Start EndoDJ</button>
+        <p class="hint">Works in Google Chrome, Microsoft Edge or the EndoDJ desktop app. Plug in your controller and allow MIDI access when asked.</p>
+        <p id="splash-error" class="error"></p>
+      </div>
+    </div>
+
+    <header id="topbar">
+      <div class="brand"><div class="orb" aria-hidden="true"></div><span class="wordmark">Endo<b>DJ</b></span></div>
+      <button id="midi-status" class="chip" title="Controller settings"><i class="dot"></i><span>No controller</span></button>
+      <button id="rec-btn" class="chip" title="Record your mix"><i class="rec-dot"></i>Rec</button>
+      <button id="am-chip" class="chip on" hidden title="Automix is on — click to open the queue"></button>
+      <span id="rec-time" class="mono"></span>
+      <div class="spacer"></div>
+      <button id="update-btn" class="chip on" hidden title="A new version of EndoDJ has been downloaded">Restart to update</button>
+      <button id="layout-btn" class="chip" title="Switch between full decks and a compact layout with a bigger song list">Layout: Full</button>
+      <label class="inline master">Master <input id="master-level" type="range" min="0" max="1" step="0.001" value="0.8" /></label>
+      <canvas id="master-meter" class="meter-h"></canvas>
+      <button id="mode-btn" class="mode-switch" role="switch" aria-checked="false" title="Day / night">
+        <svg class="sun-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5" /><g stroke-width="2" stroke-linecap="round"><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8" /></g></svg>
+        <span class="knob"></span>
+        <svg class="moon-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" /></svg>
+      </button>
+      <button id="settings-btn" class="chip">Settings</button>
+      <button id="help-btn" class="chip icon" title="Keyboard shortcuts" aria-label="Keyboard shortcuts">?</button>
+    </header>
+
+    <main id="main">
+      <section id="waveforms">
+        <canvas id="zoom-0" class="zoom"></canvas>
+        <canvas id="zoom-1" class="zoom"></canvas>
+      </section>
+
+      <section id="console">
+        <div class="deck" id="deck-0"></div>
+        <div id="mixer"></div>
+        <div class="deck" id="deck-1"></div>
+      </section>
+
+      <div id="splitter" title="Drag to resize the song list" role="separator" aria-orientation="horizontal"></div>
+
+      <section id="library">
+        <aside id="lib-sidebar"></aside>
+        <div id="lib-main">
+          <div id="lib-toolbar">
+            <input id="lib-search" type="search" placeholder="Search title, artist, BPM…" />
+            <button id="add-folder-btn">Add folder</button>
+            <button id="add-files-btn">Add files</button>
+            <input id="file-input" type="file" accept="audio/*" multiple hidden />
+            <span id="lib-export"></span>
+            <span id="lib-status" class="muted"></span>
+          </div>
+          <div id="lib-subbar" hidden></div>
+          <div id="lib-table-wrap">
+            <table id="lib-table">
+              <thead></thead>
+              <tbody></tbody>
+            </table>
+            <div id="lib-empty" class="muted"></div>
+          </div>
+          <div id="looplab" hidden></div>
+        </div>
+      </section>
+    </main>
+
+    <dialog id="controller-dlg">
+      <h2>Controller</h2>
+      <div id="controller-body"></div>
+      <form method="dialog"><button>Close</button></form>
+    </dialog>
+
+    <dialog id="settings-dlg" class="wide">
+      <h2>Settings</h2>
+      <nav class="tabs" role="tablist">
+        <button role="tab" data-tab="general">General</button>
+        <button role="tab" data-tab="audio">Audio</button>
+        <button role="tab" data-tab="guides">Guides</button>
+      </nav>
+      <div id="settings-body"></div>
+      <form method="dialog"><button>Close</button></form>
+    </dialog>
+
+    <dialog id="help-dlg">
+      <h2>Keyboard shortcuts</h2>
+      <div id="help-body"></div>
+      <form method="dialog"><button>Close</button></form>
+    </dialog>
+
+    <div id="toast"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
